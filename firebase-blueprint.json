@@ -1,0 +1,182 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profile",
+      "description": "User account and profile details",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "companyName": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    },
+    "contacts": {
+      "title": "Contact",
+      "description": "CRM contacts uploaded or added by user",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "company": { "type": "string" },
+        "status": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "string" },
+        "value": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "name", "email"]
+    },
+    "companies": {
+      "title": "Company",
+      "description": "Company directory in CRM",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "industry": { "type": "string" },
+        "size": { "type": "string" },
+        "website": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "name"]
+    },
+    "campaigns": {
+      "title": "Campaign",
+      "description": "AI-generated or manual sales campaigns",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "status": { "type": "string" },
+        "targetAudience": { "type": "string" },
+        "goal": { "type": "string" },
+        "generatedStrategy": { "type": "string" },
+        "subjectLines": { "type": "array", "items": { "type": "string" } },
+        "emailSequence": { "type": "array", "items": { "type": "object" } },
+        "whatsappMessages": { "type": "array", "items": { "type": "string" } },
+        "landingPageUrl": { "type": "string" },
+        "followUpEmails": { "type": "array", "items": { "type": "string" } },
+        "customerPersona": { "type": "string" },
+        "cta": { "type": "string" },
+        "contactsCount": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "name"]
+    },
+    "emails": {
+      "title": "Email",
+      "description": "Email outreach messages",
+      "properties": {
+        "userId": { "type": "string" },
+        "campaignId": { "type": "string" },
+        "subject": { "type": "string" },
+        "body": { "type": "string" },
+        "recipientEmail": { "type": "string" },
+        "recipientName": { "type": "string" },
+        "status": { "type": "string" },
+        "sentAt": { "type": "string" },
+        "opened": { "type": "boolean" },
+        "clicked": { "type": "boolean" }
+      },
+      "required": ["userId", "recipientEmail"]
+    },
+    "landingPages": {
+      "title": "Landing Page",
+      "description": "AI-generated landing pages",
+      "properties": {
+        "userId": { "type": "string" },
+        "campaignId": { "type": "string" },
+        "title": { "type": "string" },
+        "headline": { "type": "string" },
+        "subheadline": { "type": "string" },
+        "ctaText": { "type": "string" },
+        "bodyHtml": { "type": "string" },
+        "slug": { "type": "string" },
+        "published": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "title"]
+    },
+    "workflows": {
+      "title": "Workflow",
+      "description": "Automated sales workflows",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "trigger": { "type": "string" },
+        "steps": { "type": "array", "items": { "type": "object" } },
+        "isActive": { "type": "boolean" },
+        "executionsCount": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "title"]
+    },
+    "analytics": {
+      "title": "Analytics Record",
+      "description": "Sales and email performance analytics",
+      "properties": {
+        "userId": { "type": "string" },
+        "period": { "type": "string" },
+        "emailsSent": { "type": "number" },
+        "openRate": { "type": "number" },
+        "clickRate": { "type": "number" },
+        "leadsGenerated": { "type": "number" },
+        "conversionRate": { "type": "number" },
+        "revenue": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId"]
+    },
+    "tasks": {
+      "title": "Task",
+      "description": "CRM and sales tasks",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "priority": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "contactId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "title"]
+    },
+    "notifications": {
+      "title": "Notification",
+      "description": "User notifications",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "read": { "type": "boolean" },
+        "type": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "message"]
+    },
+    "settings": {
+      "title": "User Settings",
+      "description": "Platform preferences and API configs",
+      "properties": {
+        "userId": { "type": "string" },
+        "openaiKey": { "type": "string" },
+        "emailSenderName": { "type": "string" },
+        "emailSenderAddress": { "type": "string" },
+        "webhookUrl": { "type": "string" },
+        "theme": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId"]
+    }
+  }
+}

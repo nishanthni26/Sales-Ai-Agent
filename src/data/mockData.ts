@@ -1,0 +1,492 @@
+import { Contact, Company, Deal, Task, Meeting, CRMDocument, GeneratedCampaign } from "../types";
+
+export const initialContacts: Contact[] = [
+  {
+    id: "c-1",
+    name: "Dr. Elena Rostova",
+    email: "e.rostova@saintjudehealth.org",
+    phone: "+1 (555) 234-5678",
+    company: "Saint Jude Health System",
+    role: "Chief Medical Information Officer",
+    leadScore: 94,
+    scoreGrade: "Hot",
+    status: "contacted",
+    tags: ["Healthcare AI", "High Value", "Enterprise"],
+    lastContacted: "2 hours ago",
+    timeline: [
+      { id: "t-1", date: "Today 13:15", type: "email_opened", description: "Opened email: 'AI-Driven Patient Triage Automation'" },
+      { id: "t-2", date: "Yesterday 16:40", type: "link_clicked", description: "Clicked link: View Interactive Demo" },
+      { id: "t-3", date: "Jul 21", type: "meeting_booked", description: "Scheduled product demo for Jul 25" },
+    ],
+  },
+  {
+    id: "c-2",
+    name: "Marcus Vance",
+    email: "marcus.vance@apexlogistics.io",
+    phone: "+1 (555) 876-5432",
+    company: "Apex Global Logistics",
+    role: "VP of Supply Chain Technology",
+    leadScore: 88,
+    scoreGrade: "Hot",
+    status: "lead",
+    tags: ["Logistics", "Decision Maker", "Inbound"],
+    lastContacted: "1 day ago",
+    timeline: [
+      { id: "t-4", date: "Yesterday 11:00", type: "reply_received", description: "Replied: 'Interested in reducing route latency by 30%.'" },
+      { id: "t-5", date: "Jul 20", type: "whatsapp_sent", description: "WhatsApp campaign message delivered" },
+    ],
+  },
+  {
+    id: "c-3",
+    name: "Sarah Chen",
+    email: "sarah@nexustech.co",
+    phone: "+1 (555) 432-1098",
+    company: "Nexus Technologies",
+    role: "Head of Growth Marketing",
+    leadScore: 76,
+    scoreGrade: "Warm",
+    status: "contacted",
+    tags: ["SaaS", "Growth", "Webinar Signup"],
+    lastContacted: "3 days ago",
+    timeline: [
+      { id: "t-6", date: "Jul 20", type: "email_opened", description: "Opened webinar invite" },
+    ],
+  },
+  {
+    id: "c-4",
+    name: "David Sterling",
+    email: "dsterling@sterlingfintech.com",
+    phone: "+1 (555) 998-1122",
+    company: "Sterling Financial",
+    role: "Chief Operating Officer",
+    leadScore: 62,
+    scoreGrade: "Warm",
+    status: "lead",
+    tags: ["FinTech", "Enterprise"],
+    lastContacted: "4 days ago",
+    timeline: [
+      { id: "t-7", date: "Jul 19", type: "note_added", description: "Added note: Needs SOC2 compliance whitepaper" },
+    ],
+  },
+  {
+    id: "c-5",
+    name: "Amara Patel",
+    email: "amara@cloudscale.net",
+    phone: "+1 (555) 667-8899",
+    company: "CloudScale Networks",
+    role: "Director of IT Infrastructure",
+    leadScore: 41,
+    scoreGrade: "Cold",
+    status: "lead",
+    tags: ["Cloud", "Cold Email"],
+    lastContacted: "1 week ago",
+    timeline: [
+      { id: "t-8", date: "Jul 16", type: "email_opened", description: "First cold outreach delivered" },
+    ],
+  },
+];
+
+export const initialCompanies: Company[] = [
+  {
+    id: "comp-1",
+    name: "Saint Jude Health System",
+    domain: "saintjudehealth.org",
+    industry: "Healthcare & Hospitals",
+    size: "10,000+ employees",
+    dealsCount: 2,
+    revenue: 185000,
+  },
+  {
+    id: "comp-2",
+    name: "Apex Global Logistics",
+    domain: "apexlogistics.io",
+    industry: "Logistics & Supply Chain",
+    size: "1,200 employees",
+    dealsCount: 1,
+    revenue: 64000,
+  },
+  {
+    id: "comp-3",
+    name: "Nexus Technologies",
+    domain: "nexustech.co",
+    industry: "Software & Technology",
+    size: "250 employees",
+    dealsCount: 1,
+    revenue: 32000,
+  },
+  {
+    id: "comp-4",
+    name: "Sterling Financial",
+    domain: "sterlingfintech.com",
+    industry: "Financial Services",
+    size: "3,500 employees",
+    dealsCount: 1,
+    revenue: 120000,
+  },
+];
+
+export const initialDeals: Deal[] = [
+  {
+    id: "d-1",
+    title: "Hospital AI Triage System Expansion",
+    companyName: "Saint Jude Health System",
+    contactName: "Dr. Elena Rostova",
+    value: 125000,
+    stage: "proposal",
+    probability: 80,
+    expectedClose: "2026-08-15",
+  },
+  {
+    id: "d-2",
+    title: "Supply Chain AI Route Optimizer",
+    companyName: "Apex Global Logistics",
+    contactName: "Marcus Vance",
+    value: 64000,
+    stage: "meeting",
+    probability: 60,
+    expectedClose: "2026-08-28",
+  },
+  {
+    id: "d-3",
+    title: "Marketing Automation Platform Licenses",
+    companyName: "Nexus Technologies",
+    contactName: "Sarah Chen",
+    value: 32000,
+    stage: "contacted",
+    probability: 40,
+    expectedClose: "2026-09-10",
+  },
+  {
+    id: "d-4",
+    title: "FinTech Compliance AI Engine",
+    companyName: "Sterling Financial",
+    contactName: "David Sterling",
+    value: 120000,
+    stage: "lead",
+    probability: 20,
+    expectedClose: "2026-10-01",
+  },
+  {
+    id: "d-5",
+    title: "Clinic Pilot Program",
+    companyName: "Saint Jude Health System",
+    contactName: "Dr. Elena Rostova",
+    value: 60000,
+    stage: "closed_won",
+    probability: 100,
+    expectedClose: "2026-07-10",
+  },
+];
+
+export const initialTasks: Task[] = [
+  {
+    id: "tk-1",
+    title: "Send customized ROI proposal to Dr. Elena Rostova",
+    dueDate: "2026-07-25",
+    priority: "high",
+    completed: false,
+    assignee: "Sales AI Agent",
+    relatedTo: "Saint Jude Health System",
+  },
+  {
+    id: "tk-2",
+    title: "Schedule technical discovery call with Marcus Vance",
+    dueDate: "2026-07-26",
+    priority: "high",
+    completed: false,
+    assignee: "Sales AI Agent",
+    relatedTo: "Apex Global Logistics",
+  },
+  {
+    id: "tk-3",
+    title: "Follow up on WhatsApp campaign replies",
+    dueDate: "2026-07-24",
+    priority: "medium",
+    completed: true,
+    assignee: "Sales AI Agent",
+    relatedTo: "WhatsApp Outreach Q3",
+  },
+  {
+    id: "tk-4",
+    title: "Review lead scoring thresholds for Healthcare segment",
+    dueDate: "2026-07-27",
+    priority: "low",
+    completed: false,
+    assignee: "Admin",
+    relatedTo: "Lead Scoring Module",
+  },
+];
+
+export const initialMeetings: Meeting[] = [
+  {
+    id: "m-1",
+    title: "AI Healthcare Automation Product Demo",
+    contactName: "Dr. Elena Rostova",
+    company: "Saint Jude Health System",
+    dateTime: "2026-07-25 14:00 EST",
+    duration: "45 mins",
+    link: "https://meet.google.com/salesflow-demo-jude",
+    status: "upcoming",
+  },
+  {
+    id: "m-2",
+    title: "Logistics Optimization Technical Q&A",
+    contactName: "Marcus Vance",
+    company: "Apex Global Logistics",
+    dateTime: "2026-07-26 11:30 EST",
+    duration: "30 mins",
+    link: "https://meet.google.com/salesflow-apex-qa",
+    status: "upcoming",
+  },
+  {
+    id: "m-3",
+    title: "Growth Strategy Sync",
+    contactName: "Sarah Chen",
+    company: "Nexus Technologies",
+    dateTime: "2026-07-22 15:00 EST",
+    duration: "30 mins",
+    link: "https://meet.google.com/salesflow-nexus",
+    status: "completed",
+  },
+];
+
+export const initialDocuments: CRMDocument[] = [
+  {
+    id: "doc-1",
+    name: "SalesFlow_AI_Enterprise_Brochure.pdf",
+    type: "PDF Document",
+    size: "4.2 MB",
+    category: "Product Brochure",
+    uploadedAt: "2026-07-20",
+  },
+  {
+    id: "doc-2",
+    name: "Target_Hospital_Contacts_Q3.csv",
+    type: "CSV Contact Sheet",
+    size: "850 KB",
+    category: "Contacts List",
+    uploadedAt: "2026-07-22",
+  },
+  {
+    id: "doc-3",
+    name: "Brand_Guidelines_and_Logo.png",
+    type: "Image Asset",
+    size: "2.1 MB",
+    category: "Brand Guidelines",
+    uploadedAt: "2026-07-22",
+  },
+];
+
+export const initialNotes = [
+  {
+    id: "n-1",
+    title: "Epic EHR Integration Requirements",
+    content: "Dr. Rostova confirmed Saint Jude uses Epic 2024. Requires OAuth2 sandbox key and HIPAA BAA before pilot deployment.",
+    relatedEntityName: "Saint Jude Health System",
+    relatedEntityType: "company" as const,
+    tags: ["Technical", "EHR", "Compliance"],
+    createdAt: "2026-07-22 14:30",
+    author: "Alex Rivers",
+  },
+  {
+    id: "n-2",
+    title: "Route Latency SLA Discussion",
+    content: "Marcus Vance highlighted route latency is their #1 pain point. Asked for guaranteed 30% reduction benchmark.",
+    relatedEntityName: "Apex Global Logistics",
+    relatedEntityType: "company" as const,
+    tags: ["Sales", "Objection Handling"],
+    createdAt: "2026-07-21 11:15",
+    author: "Alex Rivers",
+  },
+  {
+    id: "n-3",
+    title: "FinTech Compliance Sign-off",
+    content: "David Sterling needs SOC2 Type II report + ISO 27001 certificate before signing proposal.",
+    relatedEntityName: "Sterling Financial",
+    relatedEntityType: "deal" as const,
+    tags: ["Security", "Legal"],
+    createdAt: "2026-07-19 16:00",
+    author: "Alex Rivers",
+  },
+];
+
+export const initialActivities = [
+  {
+    id: "act-1",
+    type: "email" as const,
+    title: "Cold Outreach Opened",
+    description: "Dr. Elena Rostova opened 'AI-Driven Patient Triage Automation' email (2nd view).",
+    performedBy: "Dr. Elena Rostova",
+    relatedTo: "Saint Jude Health System",
+    timestamp: "10 minutes ago",
+  },
+  {
+    id: "act-2",
+    type: "meeting" as const,
+    title: "Demo Meeting Booked",
+    description: "Scheduled 'AI Healthcare Automation Product Demo' for Jul 25, 14:00 EST.",
+    performedBy: "Alex Rivers",
+    relatedTo: "Dr. Elena Rostova",
+    timestamp: "2 hours ago",
+  },
+  {
+    id: "act-3",
+    type: "whatsapp" as const,
+    title: "WhatsApp Response Received",
+    description: "Marcus Vance replied: 'Interested in reducing route latency by 30%.'",
+    performedBy: "Marcus Vance",
+    relatedTo: "Apex Global Logistics",
+    timestamp: "Yesterday 11:00",
+  },
+  {
+    id: "act-4",
+    type: "deal_moved" as const,
+    title: "Deal Stage Advanced",
+    description: "Moved 'Hospital AI Triage System Expansion' to Proposal Stage ($125,000).",
+    performedBy: "Sales AI Agent",
+    relatedTo: "Saint Jude Health System",
+    timestamp: "2 days ago",
+  },
+  {
+    id: "act-5",
+    type: "call" as const,
+    title: "Discovery Call Logged",
+    description: "Completed 20 min introductory phone call with Sarah Chen at Nexus Tech.",
+    performedBy: "Alex Rivers",
+    relatedTo: "Sarah Chen",
+    timestamp: "3 days ago",
+  },
+];
+
+export const defaultActiveCampaign: GeneratedCampaign = {
+  id: "cmp-001",
+  name: "Q3 Enterprise AI Healthcare Launch",
+  type: "Product Launch",
+  goal: "Generate Leads",
+  businessDescription: "AI software for hospitals to streamline patient intake and triage.",
+  status: "active",
+  customerPersona: {
+    title: "Chief Medical Information Officer (CMIO)",
+    demography: "Healthcare Executives, Health System VPs, 35-60 yrs, Hospitals & Medical Networks",
+    painPoints: [
+      "Hospital ER overcrowding and long patient intake wait times",
+      "Manual data entry burden overloading clinical staff and causing burnout",
+      "Siloed health record systems without automated triage",
+    ],
+    goals: [
+      "Cut patient intake wait times by 40+ minutes",
+      "Automate EHR synchronization for Epic and Cerner",
+      "Deliver higher patient satisfaction and clinical throughput",
+    ],
+  },
+  emailContent: {
+    subjectLines: [
+      "Reduce hospital ER triage delays by 42% with AI",
+      "How Dr. Rostova automated patient intake in 14 days",
+      "Is your clinical staff overwhelmed by manual patient logs?",
+      "Exclusive Demo: AI Triage Copilot for Health Systems",
+    ],
+    preheader: "See how modern health systems deliver faster care using automated AI workflows.",
+    body: `Hi {{first_name}},
+
+Hospitals across North America are facing unprecedented intake bottlenecks. Modern clinical staff spend up to 3.5 hours per shift on manual patient triage and data entry.
+
+SalesFlow AI introduces our specialized Healthcare Intake Copilot—purpose-built to:
+• Auto-categorize incoming patient symptoms with 99.2% clinical accuracy
+• Instantly sync EHR records to Epic & Cerner
+• Cut waiting room idle time by over 40 minutes per patient
+
+We are reserving 10 complimentary pilot seats for healthcare technology leaders this month.
+
+Would you be open to a brief 15-minute interactive preview this Thursday?`,
+    cta: "Book 15-Min Executive Demo",
+    followUpEmails: [
+      {
+        step: 1,
+        delayDays: 3,
+        subject: "Quick follow-up regarding hospital triage AI",
+        body: "Hi {{first_name}},\n\nI know your schedule is demanding. I wanted to share a 2-minute video case study showing how Saint Jude Health System reduced triage time by 42%.\n\nShall I send over the ROI breakdown?",
+      },
+      {
+        step: 2,
+        delayDays: 7,
+        subject: "Final call for Q3 Healthcare AI pilot allocation",
+        body: "Hi {{first_name}},\n\nWe are closing our Q3 pilot intake window tomorrow. If optimizing clinical intake efficiency is on your roadmap, let's connect before seats fill up.",
+      },
+    ],
+  },
+  landingPage: {
+    headline: "Transform Hospital Patient Intake with Conversational AI",
+    subheadline: "Eliminate triage queues, automate EHR record updates, and let clinical staff focus on care.",
+    bodyText: "SalesFlow AI's Healthcare Copilot integrates natively with your hospital management systems to triage incoming patient requests in seconds.",
+    ctaText: "Claim Your 14-Day Hospital Pilot",
+    features: [
+      "99.2% Clinical Symptom Tagging Accuracy",
+      "Native Epic, Cerner & Allscripts Integration",
+      "HIPAA & SOC2 Type II Certified",
+      "Zero Code Implementation in 48 Hours",
+    ],
+  },
+  whatsAppMessages: [
+    { step: 1, text: "👋 Hi {{first_name}}! Quick question from SalesFlow AI: Are patient triage delays affecting your ER queue times? Check out our 60-second hospital AI demo here: https://salesflow.ai/demo" },
+    { step: 2, text: "Dr. Rostova saw a 42% drop in ER waiting times after implementing AI intake. Would you like a 15-min walkthrough this week?" },
+  ],
+  smsContent: [
+    { step: 1, text: "SalesFlow AI: Cut hospital triage wait times by 40+ mins. Reply DEMO for instant preview link." },
+    { step: 2, text: "Reminder: Free Q3 Hospital AI pilot seats close this Friday. Claim yours: https://salesflow.ai/pilot" },
+  ],
+  linkedInMessages: [
+    { step: 1, text: "Hi {{first_name}}, impressive work leading digital transformation at {{company}}. We've built an AI intake system that cuts hospital triage delays by 42%. Would love to share our latest clinical benchmark report with you!" },
+  ],
+  workflowNodes: [
+    { id: "node-1", title: "Segment Identified", type: "trigger", detail: "Hospital CMIOs & Health IT VPs in USA" },
+    { id: "node-2", title: "AI Personalized Email 1", type: "action", detail: "Send AI Triage Intro + Demo Link" },
+    { id: "node-3", title: "Opened Email?", type: "condition", detail: "Check within 48 Hours" },
+    { id: "node-4", title: "Send WhatsApp & LinkedIn Ping", type: "action", detail: "Deliver high-touch multi-channel intro" },
+    { id: "node-5", title: "Wait 3 Days", type: "delay", detail: "Delay before smart follow-up" },
+    { id: "node-6", title: "AI Optimized Follow-up", type: "action", detail: "Deliver ROI Case Study" },
+  ],
+  audienceSegments: [
+    { name: "USA Hospital CMIOs & IT Directors", count: 2450, criteria: "Title contains CMIO/CIO in Healthcare" },
+    { name: "Regional Health Systems (>500 beds)", count: 1200, criteria: "Revenue > $50M, Employee count > 1000" },
+    { name: "Inbound Webinar & Asset Downloads", count: 830, criteria: "Downloaded Healthcare AI Whitepaper" },
+  ],
+  socialMediaPosts: [
+    {
+      platform: "LinkedIn",
+      text: "🏥 How hospital networks are automating patient intake and reducing ER waiting times by 42 minutes with clinical AI. Read our full case study.",
+      hashtags: "#HealthIT #DigitalHealth #AIInHealthcare #CMIO",
+    },
+    {
+      platform: "Twitter / X",
+      text: "Manual triage is slowing down patient care. Discover how top health systems sync intake directly to Epic & Cerner with AI. ⚡",
+      hashtags: "#HealthcareAI #MedTech #HealthTech",
+    },
+  ],
+  callScripts: [
+    {
+      title: "Executive Health IT Pitch Script",
+      script: '"Hi {{first_name}}, this is [Name] from SalesFlow AI. We specialize in automated hospital intake systems that reduce ER queue times by over 40 minutes. Do you have 30 seconds for a quick benchmark overview?"',
+      objectHandling: '"We use Epic native tools" -> "Great! Our solution integrates directly inside Epic as an automated copilot without changing your physician workflow."',
+    },
+  ],
+  meetingBookingPage: {
+    title: "Healthcare Executive AI Demo Session",
+    link: "https://salesflow.ai/book/healthcare-demo",
+    description: "Reserve a 15-minute clinical AI demonstration tailored for hospital IT and medical executives.",
+    duration: "15 Mins",
+    availableSlots: ["Tomorrow at 10:00 AM", "Thursday at 2:00 PM", "Friday at 11:30 AM"],
+  },
+  sendSchedule: "AI Optimized (Tuesday 10:15 AM local time for maximum open rates)",
+  createdAt: "2026-07-22",
+  metrics: {
+    sent: 4480,
+    delivered: 4412,
+    openRate: 58.4,
+    clickRate: 24.8,
+    replies: 186,
+    conversions: 42,
+    revenue: 185000,
+    meetingsBooked: 28,
+  },
+};
