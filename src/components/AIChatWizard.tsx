@@ -52,12 +52,18 @@ import {
   UploadedAsset,
   GeneratedCampaign,
   ChatMessage,
+  UserProfile,
 } from "../types";
-import { askAIChat, synthesizeCampaign } from "../services/aiService";
+import { askAIChat, streamAIChat, synthesizeCampaign, generateCampaignWithAI } from "../services/aiService";
+import { saveCampaignToFirestore, saveChatToFirestore } from "../services/firestoreService";
 
 interface AIChatWizardProps {
   onCampaignLaunched: (campaign: GeneratedCampaign) => void;
   onPreviewAsset: (assetType: string, campaign: GeneratedCampaign) => void;
+  appMode?: "demo" | "real";
+  selectedModel?: string;
+  onSelectModel?: (model: string) => void;
+  user?: UserProfile | null;
 }
 
 // Exact placeholder examples requested by user
@@ -247,7 +253,23 @@ const THINKING_STEPS = [
 export const AIChatWizard: React.FC<AIChatWizardProps> = ({
   onCampaignLaunched,
   onPreviewAsset,
+  appMode = "demo",
+  selectedModel = "Llama 3.2",
+  onSelectModel,
+  user,
 }) => {
+  // Electric Cyan Theme Configuration
+  const CYAN_THEME = {
+    name: "Electric Cyan",
+    gradientText: "from-cyan-400 via-sky-300 to-blue-500",
+    borderGlow: "from-cyan-500/60 via-sky-500/40 to-blue-500/60",
+    btnBg: "bg-cyan-600 hover:bg-cyan-500 shadow-cyan-950/60",
+    badge: "bg-cyan-500/10 border-cyan-500/30 text-cyan-400",
+    orb1: "bg-cyan-500/25",
+    orb2: "bg-blue-500/20",
+    iconText: "text-cyan-400",
+  };
+
   // Step tracker: 0 = Home screen, 1..9 = Question steps, 10 = Campaign Generation Complete
   const [currentStep, setCurrentStep] = useState<number>(0);
 
@@ -380,24 +402,31 @@ export const AIChatWizard: React.FC<AIChatWizardProps> = ({
 
     // Infer product if contained, or set initial product
     let newBrief = { ...brief };
-    let startingStep = 1;
+    const cleanGoal = initialGoal.trim().toLowerCase();
+    const isGreeting = ["hi", "hello", "hey", "hola", "start", "test", "demo", "help", "hallo", "yo"].includes(cleanGoal) || cleanGoal.length <= 3;
 
-    // Acknowledge user's goal warmly
-    const ack = `Hello! I'm your AI Sales & Marketing Manager. Let me build, launch, and optimize your campaign for: **"${initialGoal}"**.\n\nI will ask you 9 quick questions one by one to customize every detail.`;
-
-    if (
-      initialGoal.toLowerCase().includes("saas") ||
-      initialGoal.toLowerCase().includes("product") ||
-      initialGoal.toLowerCase().includes("webinar") ||
-      initialGoal.toLowerCase().includes("leads") ||
-      initialGoal.toLowerCase().includes("shopify")
+    if (isGreeting) {
+      const ack = `Hello! I'm your AI Sales & Marketing Manager. I am powered by Gemini 3.6 Flash to build, launch, and optimize your complete multi-channel sales campaign in real time.\n\nI will guide you through 9 quick questions step-by-step to customize every detail for your business.`;
+      askNextQuestion(1, newBrief, ack);
+    } else if (
+      cleanGoal.includes("saas") ||
+      cleanGoal.includes("product") ||
+      cleanGoal.includes("webinar") ||
+      cleanGoal.includes("leads") ||
+      cleanGoal.includes("shopify") ||
+      cleanGoal.includes("agency") ||
+      cleanGoal.includes("software") ||
+      cleanGoal.includes("service")
     ) {
       newBrief.product = initialGoal;
       setBrief(newBrief);
-      startingStep = 2; // Jump to Audience if product is already stated!
-      askNextQuestion(2, newBrief, `${ack}\n\nGot it! Goal/Product recorded: **${initialGoal}**.`);
+      const ack = `Hello! I'm your AI Sales & Marketing Manager. Let's build, launch, and optimize your real-time campaign for **"${initialGoal}"**.\n\nGot it! Product/Goal recorded: **${initialGoal}**.`;
+      askNextQuestion(2, newBrief, ack);
     } else {
-      askNextQuestion(1, newBrief, ack);
+      newBrief.product = initialGoal;
+      setBrief(newBrief);
+      const ack = `Hello! I'm your AI Sales & Marketing Manager. Let's build, launch, and optimize your real-time campaign for **"${initialGoal}"**.\n\nProduct/Goal recorded: **${initialGoal}**.`;
+      askNextQuestion(2, newBrief, ack);
     }
   };
 
@@ -449,6 +478,93 @@ export const AIChatWizard: React.FC<AIChatWizardProps> = ({
     askNextQuestion(nextStepNum, updatedBrief, ackMessage);
   };
 
+  // Handle free-form general chat questions after step 9 or in general chat mode
+  const handleFreeFormChatMessage = async (text: string) => {
+    if (!text.trim() || isAITyping) return;
+
+    const userText = text.trim();
+    const userMsg: ChatMessage = {
+      id: `usr-chat-${Date.now()}`,
+      role: "user",
+      text: userText,
+      timestamp: "Just now",
+    };
+
+    const assistantMsgId = `bot-stream-${Date.now()}`;
+    const assistantMsg: ChatMessage = {
+      id: assistantMsgId,
+      role: "assistant",
+      text: "",
+      timestamp: "Just now",
+      modelUsed: selectedModel,
+    };
+
+    setMessages((prev) => [...prev, userMsg, assistantMsg]);
+    setInputMessage("");
+    setIsAITyping(true);
+
+    const historyForAI = messages.slice(-10).map((m) => ({
+      role: m.role,
+      text: m.text || "",
+    }));
+
+    let fullStreamed = "";
+
+    try {
+      const { fullText, modelUsed, error } = await streamAIChat(
+        userText,
+        historyForAI,
+        "You are SalesFlow AI assistant. Help the user optimize campaigns, workflows, copy, and CRM pipelines.",
+        (chunk) => {
+          fullStreamed += chunk;
+          setMessages((prevMsgs) =>
+            prevMsgs.map((msg) =>
+              msg.id === assistantMsgId ? { ...msg, text: fullStreamed, modelUsed } : msg
+            )
+          );
+        },
+        "Chatbot Message",
+        selectedModel,
+        user?.id
+      );
+
+      setMessages((prevMsgs) =>
+        prevMsgs.map((msg) =>
+          msg.id === assistantMsgId
+            ? {
+                ...msg,
+                text: error || fullText || "AI service offline.",
+                modelUsed: modelUsed || selectedModel,
+              }
+            : msg
+        )
+      );
+
+      // Save conversation to Firestore
+      if (user?.id) {
+        saveChatToFirestore(user.id, {
+          id: `chat-${Date.now()}`,
+          userId: user.id,
+          title: userText.slice(0, 30),
+          model: selectedModel,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          messages: [...messages, userMsg, { ...assistantMsg, text: fullText }],
+        }).catch(console.error);
+      }
+    } catch (e: any) {
+      setMessages((prevMsgs) =>
+        prevMsgs.map((msg) =>
+          msg.id === assistantMsgId
+            ? { ...msg, text: "AI service offline." }
+            : msg
+        )
+      );
+    } finally {
+      setIsAITyping(false);
+    }
+  };
+
   // Handle file uploads for upload steps
   const handleUploadForStep = (e: React.ChangeEvent<HTMLInputElement>, uploadType: string) => {
     const files = e.target.files;
@@ -479,15 +595,30 @@ export const AIChatWizard: React.FC<AIChatWizardProps> = ({
       setCurrentThinkingStep(i);
     }
 
-    const campaign = synthesizeCampaign(
+    const campaign = await generateCampaignWithAI(
       "Email Marketing",
       "Generate Leads",
-      finalBrief.product || "B2B SaaS Sales Engine",
-      [
-        typeof finalBrief.logo === "string" ? finalBrief.logo : "Logo.png",
-        typeof finalBrief.brochure === "string" ? finalBrief.brochure : "SalesDeck.pdf",
-      ].filter(Boolean)
+      {
+        product: finalBrief.product || "B2B SaaS Sales Engine",
+        audience: finalBrief.audience,
+        country: finalBrief.country,
+        budget: finalBrief.budget,
+        uploadedAssetNames: [
+          typeof finalBrief.logo === "string" ? finalBrief.logo : "Logo.png",
+          typeof finalBrief.brochure === "string" ? finalBrief.brochure : "SalesDeck.pdf",
+        ].filter(Boolean),
+      }
     );
+
+    // Save to Firestore whenever user is logged in or active
+    if (user && user.id) {
+      try {
+        await saveCampaignToFirestore(user.id, campaign);
+        console.log("Live Campaign saved to Firestore successfully");
+      } catch (e) {
+        console.error("Error saving campaign to Firestore:", e);
+      }
+    }
 
     setGeneratedCampaign(campaign);
     setIsThinking(false);
@@ -552,53 +683,80 @@ export const AIChatWizard: React.FC<AIChatWizardProps> = ({
 
   return (
     <div className="min-h-[calc(100vh-55px)] bg-[#0b0f17] text-[#ececec] flex flex-col relative font-sans">
-      {/* Top Header Bar */}
-      <div className="border-b border-slate-800/80 px-4 py-3 bg-[#0d1117]/90 sticky top-[53px] z-20 backdrop-blur-xl flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-          <span className="text-xs font-bold text-white tracking-wide uppercase">
-            SalesFlow AI
-          </span>
-          {currentStep > 0 && currentStep <= 9 && (
-            <span className="ml-2 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-              Step {currentStep} of 9
+      {/* Top Header Bar (Only shown when active in chat/steps or header reset needed) */}
+      {(currentStep > 0 || messages.length > 0) && (
+        <div className="border-b border-slate-800/80 px-4 py-2.5 bg-[#0d1117]/90 sticky top-0 z-20 backdrop-blur-xl flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="text-xs text-slate-400 hidden sm:block font-medium">
-            Conversational AI Manager
+            <span className="text-xs font-bold text-white tracking-wide uppercase">
+              SalesFlow AI
+            </span>
+            {currentStep > 0 && currentStep <= 9 && (
+              <span className="ml-2 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                Step {currentStep} of 9
+              </span>
+            )}
           </div>
-          {messages.length > 0 && (
-            <button
-              onClick={handleResetHome}
-              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-              id="btn-reset-ai-home"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Start Over</span>
-            </button>
-          )}
+
+          <div className="flex items-center gap-3">
+            <div className="text-xs text-slate-400 hidden sm:block font-medium">
+              Conversational AI Manager
+            </div>
+            {messages.length > 0 && (
+              <button
+                onClick={handleResetHome}
+                className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                id="btn-reset-ai-home"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Start Over</span>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* FULL-SCREEN AI ASSISTANT HOME SCREEN (When currentStep === 0) */}
       {currentStep === 0 && messages.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center max-w-4xl w-full mx-auto px-4 py-8 sm:py-12 my-auto">
+        <div className="flex-1 flex flex-col items-center justify-center max-w-4xl w-full mx-auto px-4 py-8 sm:py-12 my-auto relative z-10">
+          {/* Animated Ambient Glowing Orbs Background */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
+            <motion.div
+              animate={{
+                x: [0, 40, -30, 0],
+                y: [0, -50, 30, 0],
+                scale: [1, 1.25, 0.9, 1],
+              }}
+              transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
+              className={`absolute -top-20 left-1/4 w-96 h-96 ${CYAN_THEME.orb1} rounded-full blur-3xl`}
+            />
+            <motion.div
+              animate={{
+                x: [0, -50, 40, 0],
+                y: [0, 40, -40, 0],
+                scale: [1, 1.2, 0.95, 1],
+              }}
+              transition={{ duration: 16, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+              className={`absolute top-1/3 -right-20 w-80 h-80 ${CYAN_THEME.orb2} rounded-full blur-3xl`}
+            />
+          </div>
+
           {/* Heading & Subheading */}
           <motion.div
             initial={{ opacity: 0, y: -15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            className="text-center space-y-3 mb-8 max-w-2xl"
+            className="text-center space-y-3 mb-6 max-w-2xl"
           >
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-emerald-400 text-xs font-semibold mb-2 shadow-sm">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+            <div className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full ${CYAN_THEME.badge} text-xs font-bold mb-1 shadow-sm backdrop-blur-md`}>
+              <Sparkles className={`w-3.5 h-3.5 ${CYAN_THEME.iconText}`} />
               <span>AI Sales & Marketing Manager</span>
             </div>
 
-            <h1 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight">
+            <h1 className={`text-3xl sm:text-5xl font-extrabold tracking-tight bg-gradient-to-r ${CYAN_THEME.gradientText} bg-clip-text text-transparent animate-gradient-text drop-shadow-md`}>
               Welcome to SalesFlow AI
             </h1>
 
@@ -607,61 +765,66 @@ export const AIChatWizard: React.FC<AIChatWizardProps> = ({
             </p>
           </motion.div>
 
-          {/* ONE LARGE PROMPT BOX */}
+          {/* ONE LARGE PROMPT BOX WITH ANIMATED GLOWING GRADIENT BORDER */}
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
+            whileHover={{ scale: 1.005 }}
+            transition={{ duration: 0.4 }}
             className="w-full max-w-3xl mb-6"
           >
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (homeInput.trim()) {
-                  handleStartInterview(homeInput);
-                }
-              }}
-              className="relative bg-slate-900/95 border border-slate-800 focus-within:border-emerald-500/70 focus-within:ring-2 focus-within:ring-emerald-500/20 rounded-2xl sm:rounded-3xl p-4 shadow-2xl transition-all"
-            >
-              <textarea
-                value={homeInput}
-                onChange={(e) => setHomeInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    if (homeInput.trim()) {
-                      handleStartInterview(homeInput);
-                    }
+            <div className={`p-[1.5px] rounded-2xl sm:rounded-3xl bg-gradient-to-r ${CYAN_THEME.borderGlow} shadow-2xl transition-all duration-500`}>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (homeInput.trim()) {
+                    handleStartInterview(homeInput);
                   }
                 }}
-                placeholder="Tell me your business goal or what you'd like to sell today..."
-                rows={3}
-                id="ai-home-prompt-textarea"
-                className="w-full bg-transparent text-slate-100 text-sm sm:text-base placeholder-slate-500 focus:outline-none resize-none font-sans"
-              />
+                className="relative bg-slate-900/95 border border-slate-800/80 rounded-[22px] sm:rounded-[22px] p-4 backdrop-blur-xl"
+              >
+                <textarea
+                  value={homeInput}
+                  onChange={(e) => setHomeInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (homeInput.trim()) {
+                        handleStartInterview(homeInput);
+                      }
+                    }
+                  }}
+                  placeholder="Tell me your business goal or what you'd like to sell today..."
+                  rows={3}
+                  id="ai-home-prompt-textarea"
+                  className="w-full bg-transparent text-slate-100 text-sm sm:text-base placeholder-slate-500 focus:outline-none resize-none font-sans"
+                />
 
-              <div className="flex items-center justify-between pt-3 border-t border-slate-800/80 mt-2">
-                <span className="text-xs text-slate-400 flex items-center gap-1">
-                  <Bot className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Ask 1 question at a time flow</span>
-                </span>
-
-                <div className="flex items-center gap-3">
-                  <span className="text-[11px] text-slate-500 hidden sm:inline font-mono">
-                    Press Enter ↵
+                <div className="flex items-center justify-between pt-3 border-t border-slate-800/80 mt-2">
+                  <span className="text-xs text-slate-400 flex items-center gap-1.5">
+                    <Sparkles className={`w-3.5 h-3.5 ${CYAN_THEME.iconText}`} />
+                    <span>Guided Manager Flow</span>
                   </span>
-                  <button
-                    type="submit"
-                    disabled={!homeInput.trim()}
-                    id="ai-home-prompt-send-btn"
-                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 disabled:hover:bg-emerald-600 text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition-all shadow-md shadow-emerald-950 cursor-pointer shrink-0"
-                  >
-                    <span>Start AI Assistant</span>
-                    <Send className="w-4 h-4" />
-                  </button>
+
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] text-slate-500 hidden sm:inline font-mono">
+                      Press Enter ↵
+                    </span>
+                    <motion.button
+                      type="submit"
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      disabled={!homeInput.trim()}
+                      id="ai-home-prompt-send-btn"
+                      className={`px-5 py-2.5 rounded-xl ${CYAN_THEME.btnBg} disabled:opacity-30 text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition-all shadow-md cursor-pointer shrink-0`}
+                    >
+                      <span>Start Sales Manager</span>
+                      <Send className="w-4 h-4" />
+                    </motion.button>
+                  </div>
                 </div>
-              </div>
-            </form>
+              </form>
+            </div>
           </motion.div>
 
           {/* PLACEHOLDER EXAMPLES */}
@@ -674,15 +837,17 @@ export const AIChatWizard: React.FC<AIChatWizardProps> = ({
             <div className="flex flex-wrap items-center justify-center gap-2">
               <span className="text-xs font-semibold text-slate-400 mr-1">Examples:</span>
               {PLACEHOLDER_EXAMPLES.map((ex, idx) => (
-                <button
+                <motion.button
                   key={idx}
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
                   onClick={() => handleStartInterview(ex.prompt)}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-emerald-500/40 hover:bg-slate-800 text-xs font-medium text-slate-300 hover:text-emerald-300 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800/90 text-xs font-medium text-slate-300 hover:text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
                   id={`home-example-btn-${idx}`}
                 >
                   <span>{ex.icon}</span>
                   <span>{ex.label}</span>
-                </button>
+                </motion.button>
               ))}
             </div>
           </motion.div>
@@ -695,7 +860,7 @@ export const AIChatWizard: React.FC<AIChatWizardProps> = ({
             className="w-full max-w-4xl space-y-3"
           >
             <div className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              <Sparkles className={`w-3.5 h-3.5 ${CYAN_THEME.iconText}`} />
               <span>Suggested AI Campaigns</span>
             </div>
 
@@ -705,8 +870,8 @@ export const AIChatWizard: React.FC<AIChatWizardProps> = ({
                 return (
                   <motion.button
                     key={idx}
-                    whileHover={{ scale: 1.02, translateY: -2 }}
-                    whileTap={{ scale: 0.98 }}
+                    whileHover={{ scale: 1.03, translateY: -3 }}
+                    whileTap={{ scale: 0.97 }}
                     onClick={() => {
                       if (card.action === "step_contacts") {
                         handleStartInterview("Import contacts CSV and set up sales campaign");
@@ -714,14 +879,14 @@ export const AIChatWizard: React.FC<AIChatWizardProps> = ({
                         handleStartInterview(card.prompt);
                       }
                     }}
-                    className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-emerald-500/50 hover:bg-slate-800/90 transition-all text-left flex flex-col justify-between space-y-3 group shadow-md cursor-pointer relative overflow-hidden"
+                    className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 hover:bg-slate-800/90 transition-all text-left flex flex-col justify-between space-y-3 group shadow-md cursor-pointer relative overflow-hidden"
                     id={`home-suggestion-card-${idx}`}
                   >
                     <div className="flex items-center justify-between">
-                      <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500/20 transition-colors">
+                      <div className={`w-9 h-9 rounded-xl ${CYAN_THEME.badge} flex items-center justify-center shrink-0`}>
                         <Icon className="w-4 h-4" />
                       </div>
-                      <ArrowRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-emerald-400 group-hover:translate-x-0.5 transition-all" />
+                      <ArrowRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
                     </div>
 
                     <div>
@@ -775,7 +940,7 @@ export const AIChatWizard: React.FC<AIChatWizardProps> = ({
                 >
                   {msg.role === "assistant" && (
                     <div className="w-9 h-9 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0 shadow-lg mt-1">
-                      <Bot className="w-5 h-5" />
+                      <Sparkles className="w-5 h-5" />
                     </div>
                   )}
 
@@ -1734,7 +1899,11 @@ export const AIChatWizard: React.FC<AIChatWizardProps> = ({
             onSubmit={(e) => {
               e.preventDefault();
               if (inputMessage.trim() && !isAITyping) {
-                handleAnswerStep(inputMessage);
+                if (currentStep > 0 && currentStep <= 9) {
+                  handleAnswerStep(inputMessage);
+                } else {
+                  handleFreeFormChatMessage(inputMessage);
+                }
               }
             }}
             className="max-w-3xl mx-auto flex flex-col gap-1"

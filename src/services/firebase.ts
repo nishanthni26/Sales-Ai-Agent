@@ -6,6 +6,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
+  signInAnonymously,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   User as FirebaseUser,
@@ -23,6 +24,7 @@ import {
   where,
   getDocs,
   addDoc,
+  onSnapshot,
   serverTimestamp,
   orderBy,
   limit,
@@ -35,8 +37,9 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 // Auth instance
 export const auth = getAuth(app);
 
-// Firestore instance with custom databaseId from config
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Firestore instance with custom databaseId if specified
+const dbId = (firebaseConfig as any).firestoreDatabaseId;
+export const db = dbId && dbId !== "(default)" ? getFirestore(app, dbId) : getFirestore(app);
 
 // Providers
 export const googleProvider = new GoogleAuthProvider();
@@ -48,8 +51,10 @@ export {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
+  signInAnonymously,
   firebaseSignOut,
   onAuthStateChanged,
+  updateProfile,
   doc,
   getDoc,
   setDoc,
@@ -60,6 +65,7 @@ export {
   where,
   getDocs,
   addDoc,
+  onSnapshot,
   serverTimestamp,
   orderBy,
   limit,

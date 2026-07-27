@@ -1,214 +1,264 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  Sparkles,
-  BarChart3,
-  Users,
-  Bot,
   Search,
-  LogOut,
+  Bell,
+  HelpCircle,
+  Building2,
   ChevronDown,
   Menu,
-  Eye,
-  Link2,
-  Layers,
+  Check,
+  X,
+  Sparkles,
+  User,
+  LogOut,
+  ExternalLink,
+  MessageSquare,
+  Building,
+  Users,
+  Briefcase,
 } from "lucide-react";
 import { UserProfile } from "../types";
 
 interface NavbarProps {
-  activeTab: "landing" | "wizard" | "dashboard" | "crm" | "preview" | "integrations" | "aimarketplace" | "workflows" | "settings";
-  setActiveTab: (tab: "landing" | "wizard" | "dashboard" | "crm" | "preview" | "integrations" | "aimarketplace" | "workflows" | "settings") => void;
   user: UserProfile | null;
-  onOpenAuth: () => void;
   onLogout: () => void;
-  onOpenAssistant: (initialQuery?: string) => void;
   toggleSidebar?: () => void;
+  onSearchSelect?: (term: string) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  activeTab,
-  setActiveTab,
   user,
-  onOpenAuth,
   onLogout,
-  onOpenAssistant,
   toggleSidebar,
 }) => {
-  const [selectedModel, setSelectedModel] = useState("SalesFlow AI");
-  const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showHelpCenter, setShowHelpCenter] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const notifications = [
+    { id: "n-1", title: "New Lead Matched!", desc: "High-net-worth buyer interested in Grand Waterfront Villa.", time: "5m ago", unread: true },
+    { id: "n-2", title: "Offer Received", desc: "Penthouse at Brickell Tower received an offer of $2.9M.", time: "1h ago", unread: true },
+    { id: "n-3", title: "Automation Triggered", desc: "WhatsApp brochure sent to 14 active buyers.", time: "3h ago", unread: false },
+  ];
+
+  // Shortcut key listener for Command/Ctrl + K
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setShowSearchModal((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   return (
-    <header className="sticky top-0 z-30 bg-[#0b0f17]/90 backdrop-blur-md border-b border-white/10 px-4 py-2.5">
+    <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 px-4 py-2.5 shadow-md text-slate-100">
       <div className="flex items-center justify-between gap-4">
-        {/* Left: Mobile Sidebar toggle & Model Selector */}
+        {/* Left: Mobile Sidebar Toggle */}
         <div className="flex items-center gap-3">
           {toggleSidebar && (
             <button
               onClick={toggleSidebar}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 md:hidden"
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 md:hidden cursor-pointer"
+              title="Open Navigation"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-5 h-5 text-cyan-400" />
             </button>
           )}
+        </div>
 
-          {/* ChatGPT Style Model Dropdown Header */}
+        {/* Center: Search Bar Trigger */}
+        <div className="flex-1 max-w-md hidden sm:block">
+          <button
+            onClick={() => setShowSearchModal(true)}
+            className="w-full py-1.5 px-3 rounded-xl bg-slate-950 hover:bg-slate-800/80 border border-slate-800 text-slate-400 text-xs font-medium flex items-center justify-between transition-all cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <Search className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Search properties, contacts, deals, or automations...</span>
+            </div>
+            <kbd className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] font-mono text-cyan-400 shadow-2xs">
+              ⌘K
+            </kbd>
+          </button>
+        </div>
+
+        {/* Right Controls: Search Icon (Mobile), Notifications, Help, Profile */}
+        <div className="flex items-center gap-2">
+          {/* Mobile Search Button */}
+          <button
+            onClick={() => setShowSearchModal(true)}
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 sm:hidden cursor-pointer"
+            title="Search"
+          >
+            <Search className="w-4 h-4 text-cyan-400" />
+          </button>
+
+          {/* Notifications Bell */}
           <div className="relative">
             <button
-              onClick={() => setShowModelDropdown(!showModelDropdown)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 text-sm font-semibold transition-all"
-              id="navbar-model-selector"
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 relative cursor-pointer"
+              title="Notifications"
             >
-              <Sparkles className="w-4 h-4 text-emerald-400" />
-              <span>{selectedModel}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              <Bell className="w-4 h-4" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-cyan-400 ring-2 ring-slate-900 animate-pulse" />
             </button>
 
-            {showModelDropdown && (
-              <div className="absolute left-0 mt-2 w-64 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-2 z-50 text-xs space-y-1 backdrop-blur-xl">
-                {[
-                  { name: "SalesFlow AI", desc: "AI Sales & Marketing Manager engine" },
-                  { name: "SalesFlow AI Pro", desc: "Advanced lead scoring & campaign strategy" },
-                  { name: "SalesFlow AI Outreach", desc: "Specialized for instant messaging copy" },
-                ].map((mod, i) => (
-                  <div
-                    key={i}
-                    onClick={() => {
-                      setSelectedModel(mod.name);
-                      setShowModelDropdown(false);
-                    }}
-                    className={`p-2.5 rounded-xl cursor-pointer transition-colors ${
-                      selectedModel === mod.name ? "bg-emerald-500/10 text-emerald-300 font-bold border border-emerald-500/20" : "text-slate-300 hover:bg-white/5"
-                    }`}
-                  >
-                    <p className="font-semibold text-slate-100">{mod.name}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{mod.desc}</p>
-                  </div>
-                ))}
+            {showNotifications && (
+              <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-3 z-50 text-xs text-slate-200">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
+                  <span className="font-bold text-white">Notifications</span>
+                  <span className="text-[10px] text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 px-2 py-0.5 rounded-full font-bold">
+                    2 New
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {notifications.map((n) => (
+                    <div
+                      key={n.id}
+                      className={`p-2.5 rounded-xl transition-colors cursor-pointer ${
+                        n.unread ? "bg-slate-800/80 border border-cyan-500/30" : "bg-slate-950"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="font-semibold text-white text-xs">{n.title}</p>
+                        <span className="text-[10px] text-slate-400">{n.time}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 mt-0.5 line-clamp-2">{n.desc}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
+
+          {/* Help Center */}
+          <div className="relative">
+            <button
+              onClick={() => setShowHelpCenter(!showHelpCenter)}
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+              title="Help Center"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
+
+            {showHelpCenter && (
+              <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-3 z-50 text-xs text-slate-200 space-y-2">
+                <div className="font-bold text-white border-b border-slate-800 pb-2">
+                  Help & Documentation
+                </div>
+                <div className="space-y-1">
+                  <a
+                    href="#docs"
+                    onClick={(e) => { e.preventDefault(); setShowHelpCenter(false); }}
+                    className="flex items-center justify-between p-2 rounded-xl text-slate-300 hover:bg-slate-800 transition-colors"
+                  >
+                    <span>SalesFlow Knowledge Base</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
+                  </a>
+                  <a
+                    href="#api"
+                    onClick={(e) => { e.preventDefault(); setShowHelpCenter(false); }}
+                    className="flex items-center justify-between p-2 rounded-xl text-slate-300 hover:bg-slate-800 transition-colors"
+                  >
+                    <span>MLS & CRM Integration Guides</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
+                  </a>
+                  <a
+                    href="#support"
+                    onClick={(e) => { e.preventDefault(); setShowHelpCenter(false); }}
+                    className="flex items-center justify-between p-2 rounded-xl text-slate-300 hover:bg-slate-800 transition-colors"
+                  >
+                    <span>24/7 Priority Concierge Support</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* User Profile Badge */}
+          {user && (
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
+              <img
+                src={user.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"}
+                alt={user.name}
+                className="w-8 h-8 rounded-full border border-cyan-500/40 object-cover"
+              />
+              <span className="text-xs font-bold text-white hidden md:inline">{user.name}</span>
+            </div>
+          )}
         </div>
-
-        {/* Right: Quick Workspace Navigation Tabs & Assistant */}
-        {user ? (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveTab("wizard")}
-              id="nav-tab-ai-manager"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                activeTab === "wizard"
-                  ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
-              }`}
-            >
-              <Bot className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">AI Chat</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("dashboard")}
-              id="nav-tab-dashboard"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                activeTab === "dashboard"
-                  ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
-              }`}
-            >
-              <BarChart3 className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="hidden sm:inline">Analytics</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("crm")}
-              id="nav-tab-crm"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                activeTab === "crm"
-                  ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
-              }`}
-            >
-              <Users className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">CRM</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("preview")}
-              id="nav-tab-preview"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                activeTab === "preview"
-                  ? "bg-teal-500/15 text-teal-300 border border-teal-500/30"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
-              }`}
-            >
-              <Eye className="w-3.5 h-3.5 text-teal-400" />
-              <span className="hidden sm:inline">Preview</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("integrations")}
-              id="nav-tab-integrations"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                activeTab === "integrations"
-                  ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
-              }`}
-            >
-              <Link2 className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="hidden sm:inline">Integrations</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("aimarketplace")}
-              id="nav-tab-aimarketplace"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                activeTab === "aimarketplace"
-                  ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
-              }`}
-            >
-              <Bot className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">AI Store</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("workflows")}
-              id="nav-tab-workflows"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                activeTab === "workflows"
-                  ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="hidden sm:inline">Workflows</span>
-            </button>
-
-            <button
-              onClick={() => onOpenAssistant()}
-              id="nav-btn-assistant-toggle"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 transition-all"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden md:inline">Command Drawer</span>
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onOpenAuth}
-              className="text-xs font-semibold text-slate-300 hover:text-white px-3 py-1.5"
-            >
-              Sign In
-            </button>
-            <button
-              onClick={onOpenAuth}
-              className="px-4 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-950 transition-all"
-            >
-              Start Free
-            </button>
-          </div>
-        )}
       </div>
+
+      {/* Global Search Modal Overlay */}
+      {showSearchModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-start justify-center pt-20 px-4">
+          <div className="w-full max-w-xl bg-slate-900 rounded-2xl shadow-2xl border border-slate-800 overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-slate-100">
+            <div className="p-4 border-b border-slate-800 flex items-center gap-3 bg-slate-950">
+              <Search className="w-5 h-5 text-cyan-400" />
+              <input
+                type="text"
+                autoFocus
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search properties, leads, contacts, or automations..."
+                className="w-full text-sm font-medium text-white bg-transparent focus:outline-none"
+              />
+              <button
+                onClick={() => setShowSearchModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 max-h-80 overflow-y-auto space-y-3 custom-scrollbar text-xs">
+              <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider px-2">
+                QUICK RESULTS
+              </p>
+              <div className="space-y-1">
+                <div
+                  onClick={() => setShowSearchModal(false)}
+                  className="p-2.5 rounded-xl hover:bg-slate-800 cursor-pointer flex items-center gap-3 transition-colors"
+                >
+                  <Building className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <div>
+                    <p className="font-bold text-white">The Grand Waterfront Villa ($4,850,000)</p>
+                    <p className="text-[11px] text-slate-400">420 Ocean Drive, Miami FL • Active Listing</p>
+                  </div>
+                </div>
+                <div
+                  onClick={() => setShowSearchModal(false)}
+                  className="p-2.5 rounded-xl hover:bg-slate-800 cursor-pointer flex items-center gap-3 transition-colors"
+                >
+                  <Users className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <div>
+                    <p className="font-bold text-white">Dr. Elena Rostova (CMIO)</p>
+                    <p className="text-[11px] text-slate-400">Saint Jude Health System • Hot Buyer Lead</p>
+                  </div>
+                </div>
+                <div
+                  onClick={() => setShowSearchModal(false)}
+                  className="p-2.5 rounded-xl hover:bg-slate-800 cursor-pointer flex items-center gap-3 transition-colors"
+                >
+                  <Briefcase className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <div>
+                    <p className="font-bold text-white">Brickell Penthouse Deal ($2,950,000)</p>
+                    <p className="text-[11px] text-slate-400">Under Contract • Close Date: Aug 28</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };
+
 

@@ -1,6 +1,6 @@
 {
-  "name": "SalesFlow AI",
-  "description": "Complete Enterprise CRM & Sales Automation Platform with Workflow Marketplace (15 Categories, Ready-to-deploy templates), AI Agent Marketplace (11 Autonomous Agents), 16+ Integrations, Pipeline & Contacts.",
+  "name": "PropValue.ai",
+  "description": "Enterprise Real Estate SaaS CRM & AI Automation Platform featuring Dashboard, Marketing Hub, Sales Hub, Contacts CRM, and AI Workflow Engine.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

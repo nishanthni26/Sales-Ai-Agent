@@ -28,11 +28,42 @@ import {
   Phone,
   BarChart2,
   Calendar,
+  LayoutGrid,
+  ListFilter,
+  Search,
+  Plus,
+  Trash2,
+  Play,
+  X,
+  ChevronRight,
+  DollarSign,
+  Users,
+  Target,
+  Share2,
 } from "lucide-react";
-import { GeneratedCampaign } from "../types";
+import { GeneratedCampaign, UserProfile } from "../types";
+import { CampaignLaunchManager } from "./CampaignLaunchManager";
+
+export interface CampaignTileItem {
+  id: string;
+  name: string;
+  type: string;
+  goal: string;
+  status: "active" | "draft" | "scheduled";
+  targetPersona: string;
+  channels: ("email" | "whatsapp" | "sms" | "landing" | "linkedin")[];
+  openRate: number;
+  replyRate: number;
+  expectedValue: number;
+  healthScore: number;
+  createdAt: string;
+  teaserSubject: string;
+  campaignData: GeneratedCampaign;
+}
 
 interface CampaignPreviewPageProps {
   campaign: GeneratedCampaign;
+  user?: UserProfile | null;
   onUpdateCampaign?: (updated: GeneratedCampaign) => void;
   onLaunchCampaign?: (campaign: GeneratedCampaign) => void;
   onBackToChat?: () => void;
@@ -40,10 +71,14 @@ interface CampaignPreviewPageProps {
 
 export const CampaignPreviewPage: React.FC<CampaignPreviewPageProps> = ({
   campaign,
+  user,
   onUpdateCampaign,
   onLaunchCampaign,
   onBackToChat,
 }) => {
+  // Mode View Switcher: "tiles" or "detailed"
+  const [viewMode, setViewMode] = useState<"tiles" | "detailed">("tiles");
+
   // Local active state for preview editing & channel tabs
   const [activeChannel, setActiveChannel] = useState<
     "desktop-email" | "mobile-email" | "landing" | "whatsapp" | "sms" | "linkedin"
@@ -51,6 +86,130 @@ export const CampaignPreviewPage: React.FC<CampaignPreviewPageProps> = ({
 
   // Editable local copy of campaign
   const [currentCampaign, setCurrentCampaign] = useState<GeneratedCampaign>(campaign);
+
+  // Initial Campaign Tiles Gallery
+  const [campaignTiles, setCampaignTiles] = useState<CampaignTileItem[]>([
+    {
+      id: campaign.id || "cmp-001",
+      name: campaign.name || "Q3 Enterprise AI Healthcare Launch",
+      type: campaign.type || "Product Launch",
+      goal: campaign.goal || "Generate Leads",
+      status: campaign.status || "active",
+      targetPersona: campaign.customerPersona?.title || "Chief Medical Information Officer (CMIO)",
+      channels: ["email", "whatsapp", "sms", "landing", "linkedin"],
+      openRate: 68.4,
+      replyRate: 24.2,
+      expectedValue: 180000,
+      healthScore: 96,
+      createdAt: "Today",
+      teaserSubject: campaign.emailContent?.subjectLines?.[0] || "Reduce hospital ER triage delays by 42% with AI",
+      campaignData: campaign,
+    },
+    {
+      id: "cmp-002",
+      name: "SaaS Inbound Lead Fast-Track Drip",
+      type: "Automated Lead Drip",
+      goal: "Onboard & Convert Inbound Signups",
+      status: "active",
+      targetPersona: "VP of Software Engineering & Tech Leads",
+      channels: ["email", "whatsapp", "sms"],
+      openRate: 74.2,
+      replyRate: 31.8,
+      expectedValue: 125000,
+      healthScore: 98,
+      createdAt: "Yesterday",
+      teaserSubject: "Fast-track your sales pipeline setup in under 5 minutes",
+      campaignData: {
+        ...campaign,
+        id: "cmp-002",
+        name: "SaaS Inbound Lead Fast-Track Drip",
+        type: "Automated Campaign",
+        goal: "Onboard & Convert Inbound Signups",
+        status: "active",
+      },
+    },
+    {
+      id: "cmp-003",
+      name: "Cold Lead Win-Back & Re-Engagement",
+      type: "Re-Engagement Drip",
+      goal: "Re-Activate Inactive Accounts (>60 Days)",
+      status: "scheduled",
+      targetPersona: "Dormant Enterprise Directors",
+      channels: ["email", "linkedin"],
+      openRate: 48.6,
+      replyRate: 16.4,
+      expectedValue: 65000,
+      healthScore: 92,
+      createdAt: "3 days ago",
+      teaserSubject: "Is {{company}} still looking to streamline sales operations?",
+      campaignData: {
+        ...campaign,
+        id: "cmp-003",
+        name: "Cold Lead Win-Back & Re-Engagement",
+        type: "Custom Campaign",
+        goal: "Re-Activate Inactive Accounts",
+        status: "scheduled",
+      },
+    },
+    {
+      id: "cmp-004",
+      name: "B2B LinkedIn C-Suite Executive Outreach",
+      type: "Executive Cold Outreach",
+      goal: "Book High-Ticket Discovery Meetings",
+      status: "active",
+      targetPersona: "Chief Operating Officers & Supply Chain VPs",
+      channels: ["linkedin", "email", "landing"],
+      openRate: 81.5,
+      replyRate: 36.2,
+      expectedValue: 240000,
+      healthScore: 95,
+      createdAt: "1 week ago",
+      teaserSubject: "Automating executive pipeline reporting for {{company}}",
+      campaignData: {
+        ...campaign,
+        id: "cmp-004",
+        name: "B2B LinkedIn C-Suite Executive Outreach",
+        type: "Social Selling",
+        goal: "Book High-Ticket Discovery Meetings",
+        status: "active",
+      },
+    },
+    {
+      id: "cmp-005",
+      name: "Q4 High-Volume Flash Promo Campaign",
+      type: "Promotional Drip",
+      goal: "Drive Fast Pre-Orders & Retargeting",
+      status: "draft",
+      targetPersona: "Procurement & Purchasing Managers",
+      channels: ["email", "sms", "whatsapp"],
+      openRate: 59.1,
+      replyRate: 19.8,
+      expectedValue: 88000,
+      healthScore: 89,
+      createdAt: "Just now",
+      teaserSubject: "Exclusive Pre-Launch Access: Save 25% on Enterprise Software",
+      campaignData: {
+        ...campaign,
+        id: "cmp-005",
+        name: "Q4 High-Volume Flash Promo Campaign",
+        type: "Promotional Launch",
+        goal: "Drive Fast Pre-Orders",
+        status: "draft",
+      },
+    },
+  ]);
+
+  // Tiles Filter & Search State
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"all" | "active" | "scheduled" | "draft">("all");
+  const [filterChannel, setFilterChannel] = useState<"all" | "email" | "whatsapp" | "sms" | "linkedin">("all");
+
+  // Quick Tile Creation Modal State
+  const [showNewTileModal, setShowNewTileModal] = useState(false);
+  const [newTileTitle, setNewTileTitle] = useState("");
+  const [newTileGoal, setNewTileGoal] = useState("Generate Leads");
+  const [newTileTarget, setNewTileTarget] = useState("VPs & Decision Makers");
+  const [newTileType, setNewTileType] = useState("Outbound Sequence");
 
   // Email subject line selector
   const [selectedSubjectIdx, setSelectedSubjectIdx] = useState(0);
@@ -158,41 +317,347 @@ export const CampaignPreviewPage: React.FC<CampaignPreviewPageProps> = ({
     setTimeout(() => setCopiedNotification(false), 2000);
   };
 
+  // Filtered Tiles calculation
+  const filteredTiles = campaignTiles.filter((tile) => {
+    const matchesQuery =
+      tile.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tile.targetPersona.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tile.goal.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tile.type.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesStatus = filterStatus === "all" || tile.status === filterStatus;
+    const matchesChannel = filterChannel === "all" || tile.channels.includes(filterChannel);
+
+    return matchesQuery && matchesStatus && matchesChannel;
+  });
+
   return (
     <div className="min-h-screen bg-[#0b0f17] text-slate-100 p-4 sm:p-6 lg:p-8 space-y-8 max-w-7xl mx-auto">
-      {/* TOP HEADER & CONTROLS */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/90 border border-slate-800 p-6 rounded-3xl shadow-2xl backdrop-blur-xl relative overflow-hidden">
-        <div className="absolute -top-20 -left-20 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="space-y-1 relative z-10">
-          <div className="flex items-center gap-2.5">
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-              <span>Full Campaign Audit & Preview</span>
-            </span>
-            <span className="text-xs font-mono text-slate-400 border-l border-slate-700 pl-2.5">
-              ID: {currentCampaign.id}
-            </span>
+      {/* GLOBAL VIEW MODE SWITCHER BAR */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/90 border border-slate-800 p-4 rounded-3xl shadow-xl backdrop-blur-xl">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+            <Sparkles className="w-5 h-5 animate-pulse" />
           </div>
-
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-            {currentCampaign.name}
-          </h1>
-          <p className="text-xs text-slate-400 font-medium">
-            Target Goal: <span className="text-emerald-400 font-bold">{currentCampaign.goal}</span> • Created: {currentCampaign.createdAt}
-          </p>
+          <div>
+            <h2 className="text-base font-extrabold text-white flex items-center gap-2">
+              <span>AI Campaign Studio</span>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase">
+                {campaignTiles.length} Active AI Campaigns
+              </span>
+            </h2>
+            <p className="text-xs text-slate-400">
+              {viewMode === "tiles"
+                ? "Browse, filter, and manage all your multi-channel AI campaign tiles."
+                : "Inspecting detailed content, SLA scores, and omni-channel previews."}
+            </p>
+          </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3 relative z-10">
-          {onBackToChat && (
-            <button
-              onClick={onBackToChat}
-              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all border border-slate-700 cursor-pointer"
-            >
-              Back to AI Chat
-            </button>
+        <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
+          <button
+            onClick={() => setViewMode("tiles")}
+            className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer ${
+              viewMode === "tiles"
+                ? "bg-emerald-600 text-white shadow-md shadow-emerald-950"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <LayoutGrid className="w-4 h-4" />
+            <span>AI Campaign Tiles Gallery ({campaignTiles.length})</span>
+          </button>
+
+          <button
+            onClick={() => setViewMode("detailed")}
+            className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer ${
+              viewMode === "detailed"
+                ? "bg-indigo-600 text-white shadow-md shadow-indigo-950"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Eye className="w-4 h-4" />
+            <span>Detailed Campaign Audit</span>
+          </button>
+        </div>
+      </div>
+
+      {/* VIEW MODE A: AI CAMPAIGN TILES GALLERY VIEW */}
+      {viewMode === "tiles" && (
+        <div className="space-y-6">
+          {/* SEARCH, FILTER & ACTION TOOLBAR */}
+          <div className="p-5 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-4 shadow-xl">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              {/* Search Bar */}
+              <div className="relative flex-1 max-w-md">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search AI Campaign tiles by name, persona, or goal..."
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-all"
+                />
+              </div>
+
+              {/* Add New Campaign Tile Button */}
+              <button
+                onClick={() => setShowNewTileModal(true)}
+                className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-950 cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Create New AI Campaign Tile</span>
+              </button>
+            </div>
+
+            {/* Filter Pills */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800 text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 mr-1">
+                  <ListFilter className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Status:</span>
+                </span>
+                {(["all", "active", "scheduled", "draft"] as const).map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => setFilterStatus(st)}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer capitalize ${
+                      filterStatus === st
+                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                        : "bg-slate-950 text-slate-400 border border-slate-800 hover:text-white"
+                    }`}
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Channel:</span>
+                {(["all", "email", "whatsapp", "sms", "linkedin"] as const).map((ch) => (
+                  <button
+                    key={ch}
+                    onClick={() => setFilterChannel(ch)}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer capitalize ${
+                      filterChannel === ch
+                        ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40"
+                        : "bg-slate-950 text-slate-400 border border-slate-800 hover:text-white"
+                    }`}
+                  >
+                    {ch}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* CAMPAIGN TILES GRID */}
+          {filteredTiles.length === 0 ? (
+            <div className="p-12 text-center bg-slate-900/60 rounded-3xl border border-slate-800 space-y-3">
+              <AlertCircle className="w-10 h-10 text-amber-400 mx-auto" />
+              <h3 className="text-base font-bold text-white">No AI Campaign Tiles Match Your Filter</h3>
+              <p className="text-xs text-slate-400">Try clearing your search query or channel filter to view all campaigns.</p>
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setFilterStatus("all");
+                  setFilterChannel("all");
+                }}
+                className="px-4 py-2 bg-slate-800 text-xs font-bold text-slate-200 rounded-xl"
+              >
+                Reset Filters
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredTiles.map((tile) => (
+                <div
+                  key={tile.id}
+                  className="p-6 rounded-3xl bg-slate-900/90 border border-slate-800 space-y-4 shadow-2xl hover:border-slate-700 transition-all flex flex-col justify-between group relative overflow-hidden"
+                >
+                  <div className="space-y-3">
+                    {/* Top Badges */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        {tile.type}
+                      </span>
+
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                            tile.status === "active"
+                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                              : tile.status === "scheduled"
+                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                              : "bg-slate-800 text-slate-400 border border-slate-700"
+                          }`}
+                        >
+                          {tile.status}
+                        </span>
+
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                          {tile.healthScore}% Safe
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Campaign Name & Persona */}
+                    <div>
+                      <h3 className="font-extrabold text-white text-base group-hover:text-emerald-400 transition-colors">
+                        {tile.name}
+                      </h3>
+                      <div className="flex items-center gap-1.5 mt-1 text-xs text-slate-400">
+                        <Users className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span className="truncate">{tile.targetPersona}</span>
+                      </div>
+                    </div>
+
+                    {/* Active Channels Icons */}
+                    <div className="p-2.5 bg-slate-950 rounded-2xl border border-slate-800/80 flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-extrabold text-slate-500">Omni-Channels:</span>
+                      <div className="flex items-center gap-2">
+                        {tile.channels.includes("email") && <Mail className="w-3.5 h-3.5 text-blue-400" title="Email" />}
+                        {tile.channels.includes("whatsapp") && <MessageSquare className="w-3.5 h-3.5 text-emerald-400" title="WhatsApp" />}
+                        {tile.channels.includes("sms") && <Smartphone className="w-3.5 h-3.5 text-purple-400" title="SMS" />}
+                        {tile.channels.includes("landing") && <Globe className="w-3.5 h-3.5 text-cyan-400" title="Landing Page" />}
+                        {tile.channels.includes("linkedin") && <Linkedin className="w-3.5 h-3.5 text-indigo-400" title="LinkedIn" />}
+                      </div>
+                    </div>
+
+                    {/* KPI Metrics */}
+                    <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+                      <div className="p-2 bg-slate-950 rounded-xl border border-slate-800">
+                        <p className="text-[9px] uppercase font-bold text-slate-400">Open Rate</p>
+                        <p className="text-xs font-extrabold text-emerald-400">{tile.openRate}%</p>
+                      </div>
+                      <div className="p-2 bg-slate-950 rounded-xl border border-slate-800">
+                        <p className="text-[9px] uppercase font-bold text-slate-400">Reply Rate</p>
+                        <p className="text-xs font-extrabold text-cyan-400">{tile.replyRate}%</p>
+                      </div>
+                      <div className="p-2 bg-slate-950 rounded-xl border border-slate-800">
+                        <p className="text-[9px] uppercase font-bold text-slate-400">Value</p>
+                        <p className="text-xs font-extrabold text-indigo-300">${(tile.expectedValue / 1000).toFixed(0)}k</p>
+                      </div>
+                    </div>
+
+                    {/* Teaser Subject line */}
+                    <div className="p-3 bg-slate-950/60 rounded-2xl border border-slate-800/60 text-[11px] text-slate-300 line-clamp-2 italic">
+                      "{tile.teaserSubject}"
+                    </div>
+                  </div>
+
+                  {/* Tile Footer Action Controls */}
+                  <div className="pt-4 border-t border-slate-800 flex items-center justify-between gap-2 mt-2">
+                    <button
+                      onClick={() => {
+                        setCurrentCampaign(tile.campaignData);
+                        setViewMode("detailed");
+                      }}
+                      className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 border border-slate-700 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Inspect Tile</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        if (onLaunchCampaign) onLaunchCampaign(tile.campaignData);
+                      }}
+                      className="p-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-all cursor-pointer"
+                      title="Launch Campaign"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        const dup: CampaignTileItem = {
+                          ...tile,
+                          id: `cmp-${Date.now()}`,
+                          name: `${tile.name} (Copy)`,
+                          status: "draft",
+                        };
+                        setCampaignTiles([dup, ...campaignTiles]);
+                      }}
+                      className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all cursor-pointer"
+                      title="Duplicate Tile"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setCampaignTiles(
+                          campaignTiles.map((t) =>
+                            t.id === tile.id
+                              ? {
+                                  ...t,
+                                  healthScore: Math.min(100, t.healthScore + 2),
+                                  openRate: Math.min(99, +(t.openRate + 2.5).toFixed(1)),
+                                  replyRate: Math.min(80, +(t.replyRate + 1.8).toFixed(1)),
+                                }
+                              : t
+                          )
+                        );
+                      }}
+                      className="p-2 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-all cursor-pointer"
+                      title="AI Optimize Tile"
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setCampaignTiles(campaignTiles.filter((t) => t.id !== tile.id));
+                      }}
+                      className="p-2 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 transition-all cursor-pointer"
+                      title="Delete Tile"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
+        </div>
+      )}
+
+      {/* VIEW MODE B: DETAILED SINGLE CAMPAIGN AUDIT VIEW */}
+      {viewMode === "detailed" && (
+        <div className="space-y-8">
+          {/* TOP HEADER & CONTROLS */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/90 border border-slate-800 p-6 rounded-3xl shadow-2xl backdrop-blur-xl relative overflow-hidden">
+            <div className="absolute -top-20 -left-20 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="space-y-1 relative z-10">
+              <div className="flex items-center gap-2.5">
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                  <span>Full Campaign Audit & Preview</span>
+                </span>
+                <span className="text-xs font-mono text-slate-400 border-l border-slate-700 pl-2.5">
+                  ID: {currentCampaign.id}
+                </span>
+              </div>
+
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                {currentCampaign.name}
+              </h1>
+              <p className="text-xs text-slate-400 font-medium">
+                Target Goal: <span className="text-emerald-400 font-bold">{currentCampaign.goal}</span> • Created: {currentCampaign.createdAt}
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3 relative z-10">
+              {onBackToChat && (
+                <button
+                  onClick={onBackToChat}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all border border-slate-700 cursor-pointer"
+                >
+                  Back to AI Chat
+                </button>
+              )}
 
           <button
             onClick={() => setIsEditing(!isEditing)}
@@ -780,7 +1245,157 @@ export const CampaignPreviewPage: React.FC<CampaignPreviewPageProps> = ({
           </div>
         )}
 
+        {/* REAL WORKING CAMPAIGN LAUNCH, SCHEDULER & FIRESTORE SYSTEM */}
+        <div className="pt-6 border-t border-slate-800">
+          <CampaignLaunchManager
+            campaign={currentCampaign}
+            user={user || null}
+            onUpdateCampaign={(updated) => {
+              setCurrentCampaign(updated);
+              if (onUpdateCampaign) onUpdateCampaign(updated);
+            }}
+          />
+        </div>
       </div>
+      </div>
+      )}
+
+      {/* CREATE NEW CAMPAIGN TILE MODAL */}
+      <AnimatePresence>
+        {showNewTileModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 shadow-2xl relative overflow-hidden"
+            >
+              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-extrabold text-white">Generate AI Campaign Tile</h3>
+                    <p className="text-xs text-slate-400">Quickly create a new multi-channel AI campaign tile</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowNewTileModal(false)}
+                  className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Campaign Tile Name</label>
+                  <input
+                    type="text"
+                    value={newTileTitle}
+                    onChange={(e) => setNewTileTitle(e.target.value)}
+                    placeholder="e.g. Q4 Fintech Decision Makers Sequence"
+                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">Target Goal</label>
+                    <select
+                      value={newTileGoal}
+                      onChange={(e) => setNewTileGoal(e.target.value)}
+                      className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value="Generate Leads">Generate Leads</option>
+                      <option value="Book Meetings">Book Meetings</option>
+                      <option value="Product Trial Onboarding">Product Trial Onboarding</option>
+                      <option value="Re-activate Inactive Leads">Re-activate Inactive Leads</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">Campaign Type</label>
+                    <select
+                      value={newTileType}
+                      onChange={(e) => setNewTileType(e.target.value)}
+                      className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value="Outbound Sequence">Outbound Sequence</option>
+                      <option value="Inbound Lead Drip">Inbound Lead Drip</option>
+                      <option value="Social Outreach">Social Outreach</option>
+                      <option value="Flash Promo Launch">Flash Promo Launch</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">Target Persona</label>
+                  <input
+                    type="text"
+                    value={newTileTarget}
+                    onChange={(e) => setNewTileTarget(e.target.value)}
+                    placeholder="e.g. Chief Risk Officers & Compliance VPs"
+                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={() => setShowNewTileModal(false)}
+                  className="flex-1 py-3 bg-slate-800 text-slate-300 hover:text-white font-bold rounded-2xl transition-colors cursor-pointer text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const createdName = newTileTitle.trim() || "AI Multi-Channel Campaign";
+                    const newTile: CampaignTileItem = {
+                      id: `cmp-${Date.now()}`,
+                      name: createdName,
+                      type: newTileType,
+                      goal: newTileGoal,
+                      status: "draft",
+                      targetPersona: newTileTarget,
+                      channels: ["email", "whatsapp", "linkedin"],
+                      openRate: 65.0,
+                      replyRate: 22.0,
+                      expectedValue: 110000,
+                      healthScore: 94,
+                      createdAt: "Just now",
+                      teaserSubject: `Introducing AI-powered ${createdName} to your executive team`,
+                      campaignData: {
+                        ...currentCampaign,
+                        id: `cmp-${Date.now()}`,
+                        name: createdName,
+                        type: newTileType,
+                        goal: newTileGoal,
+                        status: "draft",
+                      },
+                    };
+                    setCampaignTiles([newTile, ...campaignTiles]);
+                    setShowNewTileModal(false);
+                    setNewTileTitle("");
+                  }}
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-2xl transition-all cursor-pointer text-xs shadow-lg shadow-emerald-950 flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Generate Campaign Tile</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 };

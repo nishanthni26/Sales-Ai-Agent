@@ -1,4 +1,283 @@
-import { Contact, Company, Deal, Task, Meeting, CRMDocument, GeneratedCampaign } from "../types";
+import { Contact, Company, Deal, Task, Meeting, CRMDocument, GeneratedCampaign, ServiceTicket, SalesQuote, MarketingSequence, DataHealthIssue, PropertyListing } from "../types";
+
+export const initialPropertyListings: PropertyListing[] = [
+  {
+    id: "prop-1",
+    title: "The Grand Waterfront Villa",
+    address: "420 Ocean Drive",
+    city: "Miami",
+    state: "FL",
+    zipCode: "33139",
+    price: 4850000,
+    beds: 5,
+    baths: 6,
+    sqft: 6200,
+    type: "Single Family",
+    status: "Active",
+    images: ["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&auto=format&fit=crop&q=80"],
+    description: "Ultra-luxury modern waterfront villa with private boat dock, infinity pool, and smart home automation.",
+    agentName: "Alex Rivera",
+    valuationEstimate: 5100000,
+    roiYield: 8.4,
+    matchingBuyersCount: 14,
+    featured: true,
+    createdAt: "2026-07-20",
+  },
+  {
+    id: "prop-2",
+    title: "Penthouse at Brickell Tower",
+    address: "888 Brickell Ave, PH-01",
+    city: "Miami",
+    state: "FL",
+    zipCode: "33131",
+    price: 2950000,
+    beds: 3,
+    baths: 3.5,
+    sqft: 3400,
+    type: "Penthouse",
+    status: "Pending",
+    images: ["https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800&auto=format&fit=crop&q=80"],
+    description: "Panoramic 360-degree skyline views of Biscayne Bay, private wrap-around terrace, custom Italian kitchen.",
+    agentName: "Sarah Jenkins",
+    valuationEstimate: 3100000,
+    roiYield: 7.2,
+    matchingBuyersCount: 22,
+    featured: true,
+    createdAt: "2026-07-18",
+  },
+  {
+    id: "prop-3",
+    title: "Modern Architectural Estate",
+    address: "1020 Beverly Crest Rd",
+    city: "Los Angeles",
+    state: "CA",
+    zipCode: "90210",
+    price: 8900000,
+    beds: 6,
+    baths: 8,
+    sqft: 8800,
+    type: "Single Family",
+    status: "Active",
+    images: ["https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&auto=format&fit=crop&q=80"],
+    description: "Gated estate with subterranean wine cellar, zero-edge pool, private screening room, and canyon views.",
+    agentName: "Marcus Vance",
+    valuationEstimate: 9250000,
+    roiYield: 6.8,
+    matchingBuyersCount: 9,
+    featured: true,
+    createdAt: "2026-07-15",
+  },
+  {
+    id: "prop-4",
+    title: "Tribeca Loft Residences",
+    address: "142 Franklin Street",
+    city: "New York",
+    state: "NY",
+    zipCode: "10013",
+    price: 3750000,
+    beds: 2,
+    baths: 2.5,
+    sqft: 2800,
+    type: "Condo",
+    status: "Under Contract",
+    images: ["https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&auto=format&fit=crop&q=80"],
+    description: "Historic cast-iron loft with exposed brick, 14ft ceilings, direct elevator entry, and chef's kitchen.",
+    agentName: "Alex Rivera",
+    valuationEstimate: 3800000,
+    roiYield: 6.5,
+    matchingBuyersCount: 18,
+    featured: false,
+    createdAt: "2026-07-12",
+  },
+];
+
+
+export const initialServiceTickets: ServiceTicket[] = [
+  {
+    id: "tkt-101",
+    ticketNumber: "TICK-4092",
+    subject: "Epic EHR Integration Timeout on Patient Intake API",
+    contactName: "Dr. Elena Rostova",
+    company: "Saint Jude Health System",
+    priority: "urgent",
+    status: "in_progress",
+    category: "Technical",
+    createdAt: "2026-07-25 09:14",
+    slaDeadline: "2 hours remaining",
+    assignedAgent: "Alex Rivers",
+    csatRating: 5,
+    description: "Intake webhooks timing out during high-volume morning triage shifts."
+  },
+  {
+    id: "tkt-102",
+    ticketNumber: "TICK-4088",
+    subject: "Custom SLA Invoice Adjustment & Tax Exempt Certificate",
+    contactName: "David Sterling",
+    company: "Sterling Financial",
+    priority: "medium",
+    status: "new",
+    category: "Billing",
+    createdAt: "2026-07-24 16:30",
+    slaDeadline: "18 hours remaining",
+    assignedAgent: "Sarah Jenkins",
+    description: "Requesting updated tax exemption form applied to Q3 invoice."
+  },
+  {
+    id: "tkt-103",
+    ticketNumber: "TICK-4075",
+    subject: "SSO & SAML 2.0 Identity Provider Configuration",
+    contactName: "Amara Patel",
+    company: "CloudScale Networks",
+    priority: "high",
+    status: "waiting_on_customer",
+    category: "Onboarding",
+    createdAt: "2026-07-22 11:00",
+    slaDeadline: "Resolved in SLA",
+    assignedAgent: "Tech Support Tier 2",
+    csatRating: 4,
+    description: "Okta metadata exchange verified; waiting for tenant admin token."
+  },
+  {
+    id: "tkt-104",
+    ticketNumber: "TICK-4061",
+    subject: "Request for Predictive AI Multi-Pipeline Analytics Export",
+    contactName: "Marcus Vance",
+    company: "Apex Global Logistics",
+    priority: "low",
+    status: "resolved",
+    category: "Feature Request",
+    createdAt: "2026-07-20 14:15",
+    slaDeadline: "Resolved",
+    assignedAgent: "Product Team",
+    csatRating: 5,
+    description: "Feature delivered in v4.2 release."
+  }
+];
+
+export const initialSalesQuotes: SalesQuote[] = [
+  {
+    id: "quote-1",
+    quoteNumber: "QUO-2026-0891",
+    dealTitle: "Enterprise Clinical AI Deployment",
+    companyName: "Saint Jude Health System",
+    contactName: "Dr. Elena Rostova",
+    items: [
+      { id: "qi-1", name: "AI Clinical Intake Copilot Engine (Annual Platform Fee)", quantity: 1, unitPrice: 120000 },
+      { id: "qi-2", name: "Epic EHR Webhook Connector Module", quantity: 1, unitPrice: 45000 },
+      { id: "qi-3", name: "Dedicated Solutions Engineer & Onsite Onboarding", quantity: 1, unitPrice: 20000 }
+    ],
+    subtotal: 185000,
+    discountPercent: 5,
+    taxPercent: 0,
+    totalAmount: 175750,
+    status: "sent",
+    createdAt: "2026-07-24",
+    validUntil: "2026-08-24",
+    paymentTerms: "Net 30",
+    notes: "Includes 24/7 Priority SLA and dedicated clinical support hotline."
+  },
+  {
+    id: "quote-2",
+    quoteNumber: "QUO-2026-0850",
+    dealTitle: "Global Supply Chain Route Optimizer",
+    companyName: "Apex Global Logistics",
+    contactName: "Marcus Vance",
+    items: [
+      { id: "qi-4", name: "SalesFlow AI Route Predictive Engine", quantity: 1, unitPrice: 85000 },
+      { id: "qi-5", name: "Custom Telematics API Webhooks", quantity: 2, unitPrice: 12500 }
+    ],
+    subtotal: 110000,
+    discountPercent: 10,
+    taxPercent: 0,
+    totalAmount: 99000,
+    status: "accepted",
+    createdAt: "2026-07-20",
+    validUntil: "2026-08-20",
+    paymentTerms: "Net 15",
+    notes: "Signoff completed by Marcus Vance."
+  }
+];
+
+export const initialMarketingSequences: MarketingSequence[] = [
+  {
+    id: "seq-1",
+    name: "C-Level Executive Nurture Sequence",
+    type: "Email Drip",
+    targetSegment: "Healthcare CMIOs & IT VPs",
+    totalSteps: 5,
+    enrolledContacts: 1420,
+    openRate: 64.2,
+    clickRate: 28.5,
+    conversionRate: 12.4,
+    status: "active",
+    createdAt: "2026-07-01"
+  },
+  {
+    id: "seq-2",
+    name: "Inbound Trial Lead Fast-Track",
+    type: "Onboarding",
+    targetSegment: "Inbound Demo Request Signups",
+    totalSteps: 4,
+    enrolledContacts: 850,
+    openRate: 72.8,
+    clickRate: 36.1,
+    conversionRate: 21.0,
+    status: "active",
+    createdAt: "2026-07-10"
+  },
+  {
+    id: "seq-3",
+    name: "Cold Lead Win-Back & Re-Engagement",
+    type: "Re-engagement",
+    targetSegment: "Inactive Contacts (>60 Days)",
+    totalSteps: 3,
+    enrolledContacts: 2100,
+    openRate: 38.5,
+    clickRate: 11.2,
+    conversionRate: 4.8,
+    status: "paused",
+    createdAt: "2026-06-15"
+  }
+];
+
+export const initialDataHealthIssues: DataHealthIssue[] = [
+  {
+    id: "dh-1",
+    type: "duplicate_contact",
+    description: "Possible duplicate contact: Marcus Vance vs M. Vance (Apex Global Logistics)",
+    affectedRecord: "Apex Global Logistics",
+    severity: "high",
+    suggestedAction: "Merge contact records & combine interaction timeline history",
+    autoFixable: true
+  },
+  {
+    id: "dh-2",
+    type: "missing_phone",
+    description: "3 Contacts missing primary phone numbers required for SMS AI Sequences",
+    affectedRecord: "CloudScale Networks",
+    severity: "medium",
+    suggestedAction: "Run Apollo/LinkedIn Enrichment to automatically populate phone numbers",
+    autoFixable: true
+  },
+  {
+    id: "dh-3",
+    type: "unassigned_owner",
+    description: "5 Inbound Deals lack assigned Account Executive owner",
+    affectedRecord: "Nexus Technologies",
+    severity: "medium",
+    suggestedAction: "Assign automatically based on Territory Round-Robin rules",
+    autoFixable: true
+  },
+  {
+    id: "dh-4",
+    type: "stale_lead",
+    description: "Lead score dropped for Amara Patel due to 30 days without engagement",
+    affectedRecord: "Amara Patel",
+    severity: "low",
+    suggestedAction: "Enroll in Re-engagement Drip Sequence or assign follow-up task",
+    autoFixable: false
+  }
+];
 
 export const initialContacts: Contact[] = [
   {
@@ -142,7 +421,7 @@ export const initialDeals: Deal[] = [
     companyName: "Apex Global Logistics",
     contactName: "Marcus Vance",
     value: 64000,
-    stage: "meeting",
+    stage: "qualified",
     probability: 60,
     expectedClose: "2026-08-28",
   },
@@ -172,7 +451,7 @@ export const initialDeals: Deal[] = [
     companyName: "Saint Jude Health System",
     contactName: "Dr. Elena Rostova",
     value: 60000,
-    stage: "closed_won",
+    stage: "won",
     probability: 100,
     expectedClose: "2026-07-10",
   },

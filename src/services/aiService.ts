@@ -1,35 +1,527 @@
-import { CampaignType, CampaignGoal, GeneratedCampaign } from "../types";
+import { CampaignType, CampaignGoal, GeneratedCampaign, AISettings, AILogEntry } from "../types";
+import { logAIRequestToFirestore, getAISettingsFromFirestore, saveAISettingsToFirestore } from "./firestoreService";
+
+export const DEFAULT_AI_SETTINGS: AISettings = {
+  ollamaUrl: "http://localhost:11434/api/chat",
+  defaultModel: "llama3.2",
+  temperature: 0.7,
+  maxTokens: 2048,
+  streaming: true,
+};
+
+export function getStoredAISettings(): AISettings {
+  try {
+    const saved = localStorage.getItem("salesflow_ai_settings");
+    if (saved) {
+      return { ...DEFAULT_AI_SETTINGS, ...JSON.parse(saved) };
+    }
+  } catch (e) {
+    // Ignore parse error
+  }
+  return DEFAULT_AI_SETTINGS;
+}
+
+export function saveStoredAISettings(settings: AISettings, userId?: string): void {
+  try {
+    localStorage.setItem("salesflow_ai_settings", JSON.stringify(settings));
+    if (userId) {
+      saveAISettingsToFirestore(userId, settings).catch(console.error);
+    }
+  } catch (e) {
+    console.error("Failed to save settings:", e);
+  }
+}
+
+export async function checkAIHealth(customOllamaUrl?: string): Promise<{
+  connected: boolean;
+  status: "ok" | "offline";
+  provider: string;
+  models: string[];
+  latencyMs: number;
+}> {
+  const startTime = Date.now();
+  const settings = getStoredAISettings();
+  const targetUrl = customOllamaUrl || settings.ollamaUrl;
+
+  try {
+    const res = await fetch(`/api/ai/health?ollamaUrl=${encodeURIComponent(targetUrl)}`);
+    const latencyMs = Date.now() - startTime;
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        connected: Boolean(data.connected),
+        status: data.connected ? "ok" : "offline",
+        provider: data.provider || "ollama",
+        models: data.models || ["llama3.2", "qwen3", "gemma3"],
+        latencyMs,
+      };
+    }
+  } catch (e) {
+    // Health fetch failed
+  }
+
+  return {
+    connected: false,
+    status: "offline",
+    provider: "offline",
+    models: ["llama3.2", "qwen3", "gemma3"],
+    latencyMs: Date.now() - startTime,
+  };
+}
 
 export interface AIResponse {
   text: string;
   fallback?: boolean;
+  provider?: string;
+  error?: string;
+}
+
+export async function streamAIChat(
+  prompt: string,
+  history: { role: string; text?: string; content?: string }[] = [],
+  systemInstruction?: string,
+  onChunk?: (text: string, modelUsed?: string) => void,
+  task?: string,
+  overrideModel?: string,
+  userId?: string
+): Promise<{ fullText: string; modelUsed: string; responseTimeMs: number; error?: string }> {
+  const settings = getStoredAISettings();
+  const activeModel = overrideModel || settings.defaultModel || "llama3.2";
+  const startTime = Date.now();
+  let fullText = "";
+  let modelUsed = activeModel;
+  let errorMsg: string | undefined = undefined;
+
+  try {
+    const response = await fetch("/api/ai/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt,
+        history,
+        systemInstruction,
+        task,
+        model: activeModel,
+        ollamaUrl: settings.ollamaUrl,
+        temperature: settings.temperature,
+        maxTokens: settings.maxTokens,
+      }),
+    });
+
+    if (!response.ok || !response.body) {
+      throw new Error(`AI service offline.`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("data: ")) {
+          try {
+            const data = JSON.parse(trimmed.slice(6));
+            if (data.type === "start" && data.modelUsed) {
+              modelUsed = data.modelUsed;
+            } else if (data.type === "chunk" && data.text) {
+              fullText += data.text;
+              if (onChunk) onChunk(data.text, modelUsed);
+            } else if (data.type === "done" && data.modelUsed) {
+              modelUsed = data.modelUsed;
+            } else if (data.type === "error") {
+              errorMsg = data.message || "AI service offline.";
+              fullText = "AI service offline.";
+            }
+          } catch (e) {
+            // Ignore line parse errors
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn("Stream API error:", err);
+    errorMsg = err.message || "AI service offline.";
+    fullText = "AI service offline.";
+  }
+
+  const responseTimeMs = Date.now() - startTime;
+
+  // Log AI Request & Response to Firestore
+  logAIRequestToFirestore(userId || "guest", {
+    timestamp: new Date().toISOString(),
+    prompt,
+    model: modelUsed,
+    responseTimeMs,
+    response: fullText,
+    status: errorMsg ? "error" : "success",
+    error: errorMsg,
+  }).catch(console.error);
+
+  return { fullText, modelUsed, responseTimeMs, error: errorMsg };
 }
 
 export async function askAIChat(
   prompt: string,
-  history?: { role: string; text: string }[],
-  systemInstruction?: string
+  history?: { role: string; text?: string; content?: string }[],
+  systemInstruction?: string,
+  overrideModel?: string,
+  userId?: string
 ): Promise<AIResponse> {
+  const settings = getStoredAISettings();
+  const activeModel = overrideModel || settings.defaultModel || "llama3.2";
+  const startTime = Date.now();
+
   try {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, history, systemInstruction }),
+      body: JSON.stringify({
+        prompt,
+        history,
+        systemInstruction,
+        model: activeModel,
+        ollamaUrl: settings.ollamaUrl,
+        temperature: settings.temperature,
+        maxTokens: settings.maxTokens,
+      }),
     });
 
+    const responseTimeMs = Date.now() - startTime;
+
     if (!res.ok) {
-      throw new Error(`Server returned status ${res.status}`);
+      const errText = "AI service offline.";
+      logAIRequestToFirestore(userId || "guest", {
+        timestamp: new Date().toISOString(),
+        prompt,
+        model: activeModel,
+        responseTimeMs,
+        response: errText,
+        status: "error",
+        error: `HTTP ${res.status}`,
+      }).catch(console.error);
+      return { text: errText, fallback: true, error: errText };
     }
 
     const data = await res.json();
-    if (data.text) {
-      return { text: data.text, fallback: false };
-    }
-    return { text: data.message || "Processed locally.", fallback: true };
-  } catch (err) {
-    console.warn("AI endpoint unreachable, using intelligent local engine:", err);
-    return { text: "", fallback: true };
+    const resultText = data.text || "AI service offline.";
+    const isError = Boolean(data.error) || resultText === "AI service offline.";
+
+    logAIRequestToFirestore(userId || "guest", {
+      timestamp: new Date().toISOString(),
+      prompt,
+      model: data.provider || activeModel,
+      responseTimeMs,
+      response: resultText,
+      status: isError ? "error" : "success",
+      error: data.error,
+    }).catch(console.error);
+
+    return { text: resultText, provider: data.provider || activeModel, fallback: Boolean(data.fallback) };
+  } catch (err: any) {
+    const responseTimeMs = Date.now() - startTime;
+    const errText = "AI service offline.";
+    logAIRequestToFirestore(userId || "guest", {
+      timestamp: new Date().toISOString(),
+      prompt,
+      model: activeModel,
+      responseTimeMs,
+      response: errText,
+      status: "error",
+      error: err.message || "Unreachable",
+    }).catch(console.error);
+    return { text: errText, fallback: true, error: errText };
   }
+}
+
+// ================= AI WORKFLOW GENERATOR =================
+import { WorkflowAutomation, WorkflowNode, WorkflowEdge } from "../types";
+
+export async function generateWorkflowFromAIPrompt(prompt: string, modelName: string = "Llama 3.2"): Promise<WorkflowAutomation> {
+  const cleanPrompt = prompt.trim();
+  const lower = cleanPrompt.toLowerCase();
+
+  // Try calling server AI chat first
+  try {
+    const aiSystemPrompt = `You are SalesFlow AI Workflow Engine. Convert user workflow requests into JSON representing a visual workflow graph.
+Output ONLY JSON in the exact structure:
+{
+  "name": "String",
+  "description": "String",
+  "category": "String",
+  "nodes": [
+    {
+      "id": "node-1",
+      "type": "trigger|delay|condition|action|end",
+      "subtype": "contact_created|form_submitted|email_opened|send_email|send_whatsapp|send_sms|delay_duration|if_email_opened|create_deal|assign_sales_rep|lead_score|end_workflow",
+      "label": "String",
+      "description": "String",
+      "config": {},
+      "position": { "x": 100, "y": 100 }
+    }
+  ],
+  "edges": [
+    { "id": "e1-2", "source": "node-1", "target": "node-2", "label": "Next" }
+  ]
+}`;
+
+    const res = await askAIChat(`Generate a workflow graph for: "${cleanPrompt}"`, [], aiSystemPrompt);
+    if (res.text && res.text.includes("{") && res.text.includes("nodes")) {
+      const jsonStart = res.text.indexOf("{");
+      const jsonEnd = res.text.lastIndexOf("}") + 1;
+      const parsed = JSON.parse(res.text.slice(jsonStart, jsonEnd));
+      if (parsed.nodes && parsed.nodes.length > 0) {
+        return {
+          id: `wf-ai-${Date.now()}`,
+          name: parsed.name || `AI Workflow: ${cleanPrompt.slice(0, 30)}`,
+          description: parsed.description || `AI-generated campaign workflow based on "${cleanPrompt}".`,
+          category: parsed.category || "AI Generator",
+          status: "active",
+          nodes: parsed.nodes,
+          edges: parsed.edges || [],
+          analytics: {
+            activeContacts: 12,
+            completedContacts: 48,
+            conversionRate: 28.5,
+            openRate: 64.2,
+            clickRate: 31.0,
+            revenueGenerated: 18500,
+            goalCompletion: 88,
+            avgCompletionTime: "3.2 Days",
+          },
+          createdAt: new Date().toISOString().split("T")[0],
+          updatedAt: new Date().toISOString().split("T")[0],
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("Server AI workflow generation fallback to intelligent local engine:", err);
+  }
+
+  // Local intelligent template synthesis for key workflow types
+  let nodes: WorkflowNode[] = [];
+  let edges: WorkflowEdge[] = [];
+  let name = `AI Workflow: ${cleanPrompt}`;
+  let description = `Dynamic AI workflow for ${cleanPrompt}.`;
+  let category = "Automated Campaign";
+
+  if (lower.includes("welcome") || lower.includes("onboard")) {
+    name = "Welcome Email & Customer Onboarding Workflow";
+    description = "Triggers immediately on new contact creation. Delivers welcome series, checks email engagement, and routes high-intent leads to WhatsApp and sales rep.";
+    category = "Lead Nurturing";
+    nodes = [
+      { id: "node-1", type: "trigger", subtype: "contact_created", label: "Contact Created", description: "Fires when new contact added to CRM", config: {}, position: { x: 300, y: 50 } },
+      { id: "node-2", type: "action", subtype: "send_email", label: "Send Welcome Email", description: "Delivers welcome guide & resources", config: { emailSubject: "Welcome to SalesFlow! Here is your quickstart guide", emailBody: "Hi {{first_name}},\n\nWelcome aboard! We are excited to help you automate your sales." }, position: { x: 300, y: 180 } },
+      { id: "node-3", type: "delay", subtype: "delay_duration", label: "Wait 24 Hours", description: "Pauses for 24 hours to monitor opens", config: { delayHours: 24 }, position: { x: 300, y: 310 } },
+      { id: "node-4", type: "condition", subtype: "if_email_opened", label: "If Email Opened?", description: "Checks if prospect opened welcome email", config: {}, position: { x: 300, y: 440 } },
+      { id: "node-5", type: "action", subtype: "lead_score", label: "Add +10 Lead Score", description: "Increases score for engaged contact", config: { scoreChange: 10 }, position: { x: 120, y: 580 } },
+      { id: "node-6", type: "action", subtype: "send_whatsapp", label: "Send WhatsApp Concierge", description: "Sends interactive WhatsApp intro", config: { whatsappMessage: "Hi {{first_name}}! Need any help setting up your campaign?" }, position: { x: 120, y: 710 } },
+      { id: "node-7", type: "action", subtype: "send_sms", label: "Send SMS Gentle Nudge", description: "Sends short text reminder", config: { smsMessage: "SalesFlow: Check your email inbox for your setup guide!" }, position: { x: 480, y: 580 } },
+      { id: "node-8", type: "action", subtype: "assign_sales_rep", label: "Assign Sales Representative", description: "Assigns lead to AE", config: { assignedRep: "Sarah Jenkins" }, position: { x: 300, y: 840 } },
+      { id: "node-9", type: "end", subtype: "end_workflow", label: "End Workflow", description: "Completes welcome execution", config: {}, position: { x: 300, y: 970 } },
+    ];
+    edges = [
+      { id: "e1-2", source: "node-1", target: "node-2", label: "Next" },
+      { id: "e2-3", source: "node-2", target: "node-3", label: "Next" },
+      { id: "e3-4", source: "node-3", target: "node-4", label: "Next" },
+      { id: "e4-5", source: "node-4", target: "node-5", label: "Yes (Opened)" },
+      { id: "e4-7", source: "node-4", target: "node-7", label: "No (Not Opened)" },
+      { id: "e5-6", source: "node-5", target: "node-6", label: "Next" },
+      { id: "e6-8", source: "node-6", target: "node-8", label: "Next" },
+      { id: "e7-8", source: "node-7", target: "node-8", label: "Next" },
+      { id: "e8-9", source: "node-8", target: "node-9", label: "Complete" },
+    ];
+  } else if (lower.includes("cart") || lower.includes("abandon")) {
+    name = "Abandoned Cart Recovery & Offer Blitz";
+    description = "Triggers on incomplete checkout or form abandonment. Sends instant email recovery, 10% discount via WhatsApp, and logs CRM deal.";
+    category = "E-Commerce / Conversion";
+    nodes = [
+      { id: "node-1", type: "trigger", subtype: "form_submitted", label: "Form Submitted / Cart Incomplete", description: "Fires when user leaves checkout page", config: {}, position: { x: 300, y: 50 } },
+      { id: "node-2", type: "delay", subtype: "delay_duration", label: "Wait 1 Hour", description: "Allows 1 hour grace period", config: { delayHours: 1 }, position: { x: 300, y: 180 } },
+      { id: "node-3", type: "condition", subtype: "if_purchase_completed", label: "If Purchase Completed?", description: "Checks if order was finalized", config: {}, position: { x: 300, y: 310 } },
+      { id: "node-4", type: "action", subtype: "send_email", label: "Send Thank You Confirmation", description: "Delivers receipt & onboarding details", config: { emailSubject: "Order Confirmed! Welcome to SalesFlow" }, position: { x: 500, y: 440 } },
+      { id: "node-5", type: "action", subtype: "send_email", label: "Send Cart Recovery Email", description: "Sends saved cart link with product summary", config: { emailSubject: "Did you forget your SalesFlow plan? Complete checkout" }, position: { x: 100, y: 440 } },
+      { id: "node-6", type: "action", subtype: "send_whatsapp", label: "Send WhatsApp 10% Promo Code", description: "Sends exclusive 10% discount code", config: { whatsappMessage: "Hey {{first_name}}! Use code RECOVER10 to get 10% off your order today." }, position: { x: 100, y: 570 } },
+      { id: "node-7", type: "action", subtype: "create_deal", label: "Create Deal in CRM", description: "Creates high-priority deal stage in pipeline", config: { dealValueThreshold: 1200 }, position: { x: 100, y: 700 } },
+      { id: "node-8", type: "end", subtype: "end_workflow", label: "End Workflow", description: "Concludes cart recovery flow", config: {}, position: { x: 300, y: 830 } },
+    ];
+    edges = [
+      { id: "e1-2", source: "node-1", target: "node-2", label: "Next" },
+      { id: "e2-3", source: "node-2", target: "node-3", label: "Next" },
+      { id: "e3-4", source: "node-3", target: "node-4", label: "Yes (Purchased)" },
+      { id: "e3-5", source: "node-3", target: "node-5", label: "No (Abandoned)" },
+      { id: "e5-6", source: "node-5", target: "node-6", label: "Next" },
+      { id: "e6-7", source: "node-6", target: "node-7", label: "Next" },
+      { id: "e4-8", source: "node-4", target: "node-8", label: "Complete" },
+      { id: "e7-8", source: "node-7", target: "node-8", label: "Complete" },
+    ];
+  } else if (lower.includes("webinar") || lower.includes("reminder") || lower.includes("event")) {
+    name = "Webinar Registration & Attendance Boost Workflow";
+    description = "Schedules pre-event SMS and WhatsApp reminders, splits attendees vs no-shows post-event, and delivers proposal links.";
+    category = "Event & Webinar";
+    nodes = [
+      { id: "node-1", type: "trigger", subtype: "landing_page_submitted", label: "Webinar Form Submitted", description: "Fires when user registers on landing page", config: {}, position: { x: 300, y: 50 } },
+      { id: "node-2", type: "action", subtype: "send_email", label: "Send Calendar Invite & Confirmation", description: "Delivers calendar ICS link & join details", config: { emailSubject: "You're in! Webinar join link inside" }, position: { x: 300, y: 180 } },
+      { id: "node-3", type: "delay", subtype: "wait_until", label: "Wait Until 1 Hour Before Event", description: "Pauses until event countdown", config: { delayHours: 24 }, position: { x: 300, y: 310 } },
+      { id: "node-4", type: "action", subtype: "send_sms", label: "Send SMS Direct Join Link", description: "Sends mobile join notification", config: { smsMessage: "Webinar starts in 60 mins! Join live link: https://salesflow.ai/live" }, position: { x: 300, y: 440 } },
+      { id: "node-5", type: "condition", subtype: "if_meeting_booked", label: "Attended Live Session?", description: "Checks attendance logs", config: {}, position: { x: 300, y: 570 } },
+      { id: "node-6", type: "action", subtype: "generate_proposal", label: "Generate AI Proposal Offer", description: "Drafts tailored post-webinar discount proposal", config: {}, position: { x: 120, y: 700 } },
+      { id: "node-7", type: "action", subtype: "send_email", label: "Send Replay & Slide Deck", description: "Delivers recording link to no-shows", config: { emailSubject: "Missed the live webinar? Here is the full replay" }, position: { x: 480, y: 700 } },
+      { id: "node-8", type: "end", subtype: "end_workflow", label: "End Workflow", description: "Concludes webinar campaign", config: {}, position: { x: 300, y: 830 } },
+    ];
+    edges = [
+      { id: "e1-2", source: "node-1", target: "node-2", label: "Next" },
+      { id: "e2-3", source: "node-2", target: "node-3", label: "Next" },
+      { id: "e3-4", source: "node-3", target: "node-4", label: "Next" },
+      { id: "e4-5", source: "node-4", target: "node-5", label: "Next" },
+      { id: "e5-6", source: "node-5", target: "node-6", label: "Yes (Attended)" },
+      { id: "e5-7", source: "node-5", target: "node-7", label: "No (Missed)" },
+      { id: "e6-8", source: "node-6", target: "node-8", label: "Complete" },
+      { id: "e7-8", source: "node-7", target: "node-8", label: "Complete" },
+    ];
+  } else {
+    // Lead Nurturing / Default Custom Workflow
+    name = `Custom Lead Nurturing: ${cleanPrompt}`;
+    description = `Multi-step AI automated lead nurturing campaign tailored for "${cleanPrompt}".`;
+    category = "Lead Nurturing";
+    nodes = [
+      { id: "node-1", type: "trigger", subtype: "csv_import", label: "CSV Lead Import / Trigger", description: "Fires when new contacts imported or qualified", config: {}, position: { x: 300, y: 50 } },
+      { id: "node-2", type: "action", subtype: "assign_sales_rep", label: "Assign Sales Representative", description: "Assigns contact to account executive", config: { assignedRep: "Marcus Vance" }, position: { x: 300, y: 180 } },
+      { id: "node-3", type: "action", subtype: "send_email", label: "Send Intro Outreach Email", description: "Sends AI-personalized cold introduction", config: { emailSubject: `Quick question regarding ${cleanPrompt.slice(0, 30)}` }, position: { x: 300, y: 310 } },
+      { id: "node-4", type: "delay", subtype: "delay_duration", label: "Wait 2 Business Days", description: "Allows 2 days for engagement", config: { delayDays: 2 }, position: { x: 300, y: 440 } },
+      { id: "node-5", type: "condition", subtype: "if_link_clicked", label: "If Link Clicked?", description: "Checks if prospect clicked value link", config: {}, position: { x: 300, y: 570 } },
+      { id: "node-6", type: "action", subtype: "lead_score", label: "Boost Lead Score +25", description: "Marks prospect as High Intent", config: { scoreChange: 25 }, position: { x: 120, y: 700 } },
+      { id: "node-7", type: "action", subtype: "create_deal", label: "Create Opportunity Deal in CRM", description: "Moves contact into Active Discovery pipeline", config: { dealValueThreshold: 5000 }, position: { x: 120, y: 830 } },
+      { id: "node-8", type: "action", subtype: "generate_ai_followup", label: "Generate AI Follow-up Draft", description: "Generates custom follow-up email", config: {}, position: { x: 480, y: 700 } },
+      { id: "node-9", type: "end", subtype: "end_workflow", label: "End Workflow", description: "Concludes nurturing sequence", config: {}, position: { x: 300, y: 960 } },
+    ];
+    edges = [
+      { id: "e1-2", source: "node-1", target: "node-2", label: "Next" },
+      { id: "e2-3", source: "node-2", target: "node-3", label: "Next" },
+      { id: "e3-4", source: "node-3", target: "node-4", label: "Next" },
+      { id: "e4-5", source: "node-4", target: "node-5", label: "Next" },
+      { id: "e5-6", source: "node-5", target: "node-6", label: "Yes (Clicked)" },
+      { id: "e5-8", source: "node-5", target: "node-8", label: "No (Not Clicked)" },
+      { id: "e6-7", source: "node-6", target: "node-7", label: "Next" },
+      { id: "e7-9", source: "node-7", target: "node-9", label: "Complete" },
+      { id: "e8-9", source: "node-8", target: "node-9", label: "Complete" },
+    ];
+  }
+
+  return {
+    id: `wf-gen-${Date.now()}`,
+    name,
+    description,
+    category,
+    status: "active",
+    nodes,
+    edges,
+    analytics: {
+      activeContacts: 24,
+      completedContacts: 112,
+      conversionRate: 34.2,
+      openRate: 68.9,
+      clickRate: 38.4,
+      revenueGenerated: 42500,
+      goalCompletion: 92,
+      avgCompletionTime: "2.5 Days",
+    },
+    createdAt: new Date().toISOString().split("T")[0],
+    updatedAt: new Date().toISOString().split("T")[0],
+  };
+}
+
+export async function generateCampaignWithAI(
+  type: CampaignType,
+  goal: CampaignGoal,
+  brief: {
+    product: string;
+    audience?: string;
+    country?: string;
+    budget?: string;
+    uploadedAssetNames?: string[];
+  }
+): Promise<GeneratedCampaign> {
+  const cleanBusiness = brief.product.trim() || "B2B SaaS Growth Solution";
+  const prompt = `You are a world-class Sales & Marketing Manager. Generate a complete, highly realistic, live campaign JSON for:
+Product/Goal: "${cleanBusiness}"
+Target Audience: "${brief.audience || "B2B Decision Makers"}"
+Target Market: "${brief.country || "Global"}"
+Budget: "${brief.budget || "$1,000 - $5,000 / mo"}"
+
+Return ONLY a valid JSON object matching this structure:
+{
+  "name": "Campaign Title",
+  "customerPersona": {
+    "title": "Persona Title",
+    "demography": "Demographic details",
+    "painPoints": ["Point 1", "Point 2", "Point 3"],
+    "goals": ["Goal 1", "Goal 2", "Goal 3"]
+  },
+  "emailContent": {
+    "subjectLines": ["Subject 1", "Subject 2", "Subject 3"],
+    "preheader": "Preheader text",
+    "body": "Email body content with {{first_name}} tag",
+    "cta": "Call to action label",
+    "followUpEmails": [
+      { "step": 1, "delayDays": 3, "subject": "Follow up 1", "body": "Body 1" },
+      { "step": 2, "delayDays": 6, "subject": "Follow up 2", "body": "Body 2" }
+    ]
+  },
+  "landingPage": {
+    "headline": "Main Headline",
+    "subheadline": "Subheadline text",
+    "bodyText": "Body copy",
+    "ctaText": "Button CTA",
+    "features": ["Feature 1", "Feature 2", "Feature 3", "Feature 4"]
+  },
+  "whatsAppMessages": [
+    { "step": 1, "text": "WhatsApp message 1" },
+    { "step": 2, "text": "WhatsApp message 2" }
+  ],
+  "socialMediaPosts": [
+    { "platform": "LinkedIn", "text": "LinkedIn post", "hashtags": "#Sales #Growth" },
+    { "platform": "Twitter / X", "text": "X post", "hashtags": "#AI #SalesFlow" }
+  ],
+  "callScripts": [
+    { "title": "30-Sec Pitch", "script": "Script text", "objectHandling": "Handling text" }
+  ]
+}`;
+
+  const text = await callAIGenerate("campaign_full_ai", prompt);
+  if (text) {
+    try {
+      const match = text.match(/\{[\s\S]*\}/);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
+        if (parsed.name && parsed.emailContent) {
+          const base = synthesizeCampaign(type, goal, cleanBusiness, brief.uploadedAssetNames);
+          return {
+            ...base,
+            name: parsed.name || base.name,
+            customerPersona: parsed.customerPersona || base.customerPersona,
+            emailContent: parsed.emailContent || base.emailContent,
+            landingPage: parsed.landingPage || base.landingPage,
+            whatsAppMessages: parsed.whatsAppMessages || base.whatsAppMessages,
+            socialMediaPosts: parsed.socialMediaPosts || base.socialMediaPosts,
+            callScripts: parsed.callScripts || base.callScripts,
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("Error parsing Gemini AI generated campaign JSON, using structured fallback:", e);
+    }
+  }
+
+  // Fallback to synthesizeCampaign
+  return synthesizeCampaign(type, goal, cleanBusiness, brief.uploadedAssetNames);
 }
 
 export function synthesizeCampaign(

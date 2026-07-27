@@ -1,5 +1,6 @@
 import {
   db,
+  auth,
   collection,
   doc,
   getDoc,
@@ -8,12 +9,61 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  onSnapshot,
   query,
   where,
   orderBy,
   serverTimestamp,
 } from "./firebase";
-import { Contact, Company, Task, GeneratedCampaign, UserProfile } from "../types";
+import { Contact, Company, Deal, Task, GeneratedCampaign, UserProfile, WorkflowAutomation, WorkflowExecutionLog, AISettings, AILogEntry, ChatMessage, ChatSession, ContactTimelineItem } from "../types";
+import { calculateLeadScoreAndStatus } from "./leadScoringEngine";
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map((provider) => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 // ================= USER PROFILE =================
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
@@ -44,17 +94,26 @@ export async function getUserContacts(userId: string): Promise<Contact[]> {
     const list: Contact[] = [];
     snap.forEach((docSnap) => {
       const d = docSnap.data();
+      const fullName = d.name || `${d.firstName || ''} ${d.lastName || ''}`.trim() || "Unnamed Contact";
       list.push({
         id: docSnap.id,
-        name: d.name || "Unnamed Contact",
+        name: fullName,
+        firstName: d.firstName || fullName.split(" ")[0] || "",
+        lastName: d.lastName || fullName.split(" ").slice(1).join(" ") || "",
         email: d.email || "",
         phone: d.phone || "",
         company: d.company || "",
-        role: d.role || "Prospect",
+        role: d.role || d.jobTitle || "Prospect",
+        country: d.country || "United States",
+        city: d.city || "San Francisco",
         leadScore: d.leadScore || 50,
         scoreGrade: d.scoreGrade || "Warm",
         status: d.status || "lead",
-        tags: d.tags || ["CSV Upload"],
+        tags: d.tags || ["Inbound"],
+        source: d.source || "Website Form",
+        owner: d.owner || "Alex Rivers",
+        notes: d.notes || "",
+        createdAt: d.createdAt || new Date().toISOString(),
         lastContacted: d.lastContacted || "Recently",
         timeline: d.timeline || [],
       });
@@ -62,29 +121,83 @@ export async function getUserContacts(userId: string): Promise<Contact[]> {
     return list;
   } catch (err) {
     console.error("Error fetching contacts from Firestore:", err);
+    try {
+      handleFirestoreError(err, OperationType.LIST, "contacts");
+    } catch {
+      // Return empty array fallback after logging
+    }
     return [];
   }
 }
 
+export function subscribeToUserContacts(userId: string, callback: (contacts: Contact[]) => void): () => void {
+  const q = query(collection(db, "contacts"), where("userId", "==", userId));
+  return onSnapshot(q, (snap) => {
+    const list: Contact[] = [];
+    snap.forEach((docSnap) => {
+      const d = docSnap.data();
+      const fullName = d.name || `${d.firstName || ''} ${d.lastName || ''}`.trim() || "Unnamed Contact";
+      list.push({
+        id: docSnap.id,
+        name: fullName,
+        firstName: d.firstName || fullName.split(" ")[0] || "",
+        lastName: d.lastName || fullName.split(" ").slice(1).join(" ") || "",
+        email: d.email || "",
+        phone: d.phone || "",
+        company: d.company || "",
+        role: d.role || d.jobTitle || "Prospect",
+        country: d.country || "United States",
+        city: d.city || "San Francisco",
+        leadScore: d.leadScore || 50,
+        scoreGrade: d.scoreGrade || "Warm",
+        status: d.status || "lead",
+        tags: d.tags || ["Inbound"],
+        source: d.source || "Website Form",
+        owner: d.owner || "Alex Rivers",
+        notes: d.notes || "",
+        createdAt: d.createdAt || new Date().toISOString(),
+        lastContacted: d.lastContacted || "Recently",
+        timeline: d.timeline || [],
+      });
+    });
+    callback(list);
+  }, (err) => {
+    console.warn("Real-time contacts sync error:", err);
+    try {
+      handleFirestoreError(err, OperationType.LIST, "contacts");
+    } catch {
+      // Ignored after logging
+    }
+  });
+}
+
 export async function addContactToFirestore(userId: string, contactData: Partial<Contact>): Promise<string> {
+  const fullName = contactData.name || `${contactData.firstName || ''} ${contactData.lastName || ''}`.trim() || "New Contact";
   const ref = await addDoc(collection(db, "contacts"), {
     userId,
-    name: contactData.name || "New Contact",
+    name: fullName,
+    firstName: contactData.firstName || fullName.split(" ")[0] || "",
+    lastName: contactData.lastName || fullName.split(" ").slice(1).join(" ") || "",
     email: contactData.email || "",
     phone: contactData.phone || "",
     company: contactData.company || "",
     role: contactData.role || "Decision Maker",
+    country: contactData.country || "United States",
+    city: contactData.city || "",
     leadScore: contactData.leadScore || 60,
     scoreGrade: contactData.scoreGrade || "Warm",
     status: contactData.status || "lead",
     tags: contactData.tags || ["Inbound"],
+    source: contactData.source || "Manual Entry",
+    owner: contactData.owner || "Alex Rivers",
+    notes: contactData.notes || "",
     lastContacted: new Date().toISOString().split("T")[0],
-    timeline: [
+    timeline: contactData.timeline || [
       {
         id: `t-${Date.now()}`,
         date: new Date().toISOString().split("T")[0],
         type: "note_added",
-        description: "Contact added to Firestore CRM database.",
+        description: "Contact created in Firestore CRM database.",
       },
     ],
     createdAt: new Date().toISOString(),
@@ -94,22 +207,30 @@ export async function addContactToFirestore(userId: string, contactData: Partial
 
 export async function saveBulkContactsToFirestore(
   userId: string,
-  contacts: Array<{ name: string; email: string; phone?: string; company?: string; role?: string }>
+  contacts: Array<Partial<Contact>>
 ): Promise<number> {
   let count = 0;
   for (const c of contacts) {
-    if (!c.email || !c.name) continue;
+    if (!c.email && !c.name) continue;
+    const fullName = c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || "Contact";
     await addDoc(collection(db, "contacts"), {
       userId,
-      name: c.name,
-      email: c.email,
+      name: fullName,
+      firstName: c.firstName || fullName.split(" ")[0] || "",
+      lastName: c.lastName || fullName.split(" ").slice(1).join(" ") || "",
+      email: c.email || "",
       phone: c.phone || "+1 (555) 019-2831",
       company: c.company || "Enterprise Account",
       role: c.role || "Executive",
-      leadScore: Math.floor(Math.random() * 40) + 50,
+      country: c.country || "United States",
+      city: c.city || "",
+      leadScore: c.leadScore || Math.floor(Math.random() * 40) + 50,
       scoreGrade: "Warm",
-      status: "lead",
-      tags: ["CSV Import"],
+      status: c.status || "lead",
+      tags: c.tags || ["CSV Import"],
+      source: c.source || "CSV Import",
+      owner: c.owner || "Alex Rivers",
+      notes: c.notes || "",
       lastContacted: "Just imported",
       timeline: [],
       createdAt: new Date().toISOString(),
@@ -129,6 +250,79 @@ export async function deleteContactFromFirestore(contactId: string): Promise<voi
   await deleteDoc(ref);
 }
 
+/**
+ * Background CRM Function: Recalculates Lead Score & Status for all contacts
+ * based on interaction activity and email responsiveness, updating Firestore.
+ */
+export async function recalculateAndSyncAllContactScores(userId: string): Promise<{ updatedCount: number; totalCount: number }> {
+  try {
+    const contacts = await getUserContacts(userId);
+    let updatedCount = 0;
+
+    for (const c of contacts) {
+      const { leadScore, scoreGrade, status, scoreChanged, statusChanged } = calculateLeadScoreAndStatus(c);
+
+      if (scoreChanged || statusChanged) {
+        await updateContactInFirestore(c.id, {
+          leadScore,
+          scoreGrade,
+          status,
+        });
+        updatedCount++;
+      }
+    }
+
+    return { updatedCount, totalCount: contacts.length };
+  } catch (err) {
+    console.error("Error running background lead score recalculation in Firestore:", err);
+    return { updatedCount: 0, totalCount: 0 };
+  }
+}
+
+/**
+ * Adds an interaction (e.g. Email Reply, Email Click, Meeting Booked) to a contact timeline
+ * and automatically triggers background Lead Score & Status recalculation in Firestore.
+ */
+export async function addInteractionAndAutoScore(
+  contact: Contact,
+  interaction: { type: ContactTimelineItem["type"]; description: string }
+): Promise<Contact> {
+  const newTimelineItem: ContactTimelineItem = {
+    id: `t-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+    date: new Date().toISOString().split("T")[0],
+    type: interaction.type,
+    description: interaction.description,
+  };
+
+  const updatedTimeline = [newTimelineItem, ...(contact.timeline || [])];
+  const updatedContactTemp: Contact = {
+    ...contact,
+    timeline: updatedTimeline,
+    lastContacted: new Date().toISOString().split("T")[0],
+  };
+
+  const { leadScore, scoreGrade, status } = calculateLeadScoreAndStatus(updatedContactTemp);
+
+  const finalUpdatedContact: Contact = {
+    ...updatedContactTemp,
+    leadScore,
+    scoreGrade,
+    status,
+  };
+
+  if (contact.id) {
+    await updateContactInFirestore(contact.id, {
+      timeline: updatedTimeline,
+      lastContacted: finalUpdatedContact.lastContacted,
+      leadScore,
+      scoreGrade,
+      status,
+    });
+  }
+
+  return finalUpdatedContact;
+}
+
 // ================= COMPANIES =================
 export async function getUserCompanies(userId: string): Promise<Company[]> {
   try {
@@ -140,11 +334,16 @@ export async function getUserCompanies(userId: string): Promise<Company[]> {
       list.push({
         id: docSnap.id,
         name: d.name || "Company",
-        domain: d.domain || "example.com",
+        domain: d.domain || d.website || "example.com",
         industry: d.industry || "Software",
-        size: d.size || "50-200",
+        size: d.size || d.employees || "50-200",
         dealsCount: d.dealsCount || 1,
         revenue: d.revenue || 50000,
+        location: d.location || "San Francisco, CA",
+        owner: d.owner || "Alex Rivers",
+        notes: d.notes || "",
+        associatedContacts: d.associatedContacts || [],
+        createdAt: d.createdAt || new Date().toISOString(),
       });
     });
     return list;
@@ -154,6 +353,33 @@ export async function getUserCompanies(userId: string): Promise<Company[]> {
   }
 }
 
+export function subscribeToUserCompanies(userId: string, callback: (companies: Company[]) => void): () => void {
+  const q = query(collection(db, "companies"), where("userId", "==", userId));
+  return onSnapshot(q, (snap) => {
+    const list: Company[] = [];
+    snap.forEach((docSnap) => {
+      const d = docSnap.data();
+      list.push({
+        id: docSnap.id,
+        name: d.name || "Company",
+        domain: d.domain || d.website || "example.com",
+        industry: d.industry || "Software",
+        size: d.size || d.employees || "50-200",
+        dealsCount: d.dealsCount || 1,
+        revenue: d.revenue || 50000,
+        location: d.location || "San Francisco, CA",
+        owner: d.owner || "Alex Rivers",
+        notes: d.notes || "",
+        associatedContacts: d.associatedContacts || [],
+        createdAt: d.createdAt || new Date().toISOString(),
+      });
+    });
+    callback(list);
+  }, (err) => {
+    console.warn("Real-time companies sync error:", err);
+  });
+}
+
 export async function addCompanyToFirestore(userId: string, company: Partial<Company>): Promise<string> {
   const ref = await addDoc(collection(db, "companies"), {
     userId,
@@ -161,11 +387,113 @@ export async function addCompanyToFirestore(userId: string, company: Partial<Com
     domain: company.domain || "acme.com",
     industry: company.industry || "Technology",
     size: company.size || "100-500",
-    dealsCount: company.dealsCount || 1,
     revenue: company.revenue || 75000,
+    dealsCount: company.dealsCount || 0,
+    location: company.location || "United States",
+    owner: company.owner || "Alex Rivers",
+    notes: company.notes || "",
+    associatedContacts: company.associatedContacts || [],
     createdAt: new Date().toISOString(),
   });
   return ref.id;
+}
+
+export async function updateCompanyInFirestore(companyId: string, updates: Partial<Company>): Promise<void> {
+  const ref = doc(db, "companies", companyId);
+  await updateDoc(ref, updates as any);
+}
+
+export async function deleteCompanyFromFirestore(companyId: string): Promise<void> {
+  const ref = doc(db, "companies", companyId);
+  await deleteDoc(ref);
+}
+
+// ================= DEALS =================
+export async function getUserDeals(userId: string): Promise<Deal[]> {
+  try {
+    const q = query(collection(db, "deals"), where("userId", "==", userId));
+    const snap = await getDocs(q);
+    const list: Deal[] = [];
+    snap.forEach((docSnap) => {
+      const d = docSnap.data();
+      list.push({
+        id: docSnap.id,
+        title: d.title || d.name || "Deal Opportunity",
+        value: Number(d.value) || 25000,
+        currency: d.currency || "USD ($)",
+        pipeline: d.pipeline || "Standard Sales Pipeline",
+        stage: d.stage || "lead",
+        expectedClose: d.expectedClose || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
+        probability: d.probability !== undefined ? d.probability : 50,
+        owner: d.owner || "Alex Rivers",
+        companyName: d.companyName || d.associatedCompany || "Enterprise Client",
+        contactName: d.contactName || d.associatedContact || "Key Stakeholder",
+        notes: d.notes || "",
+        createdAt: d.createdAt || new Date().toISOString(),
+      });
+    });
+    return list;
+  } catch (err) {
+    console.error("Error fetching deals from Firestore:", err);
+    return [];
+  }
+}
+
+export function subscribeToUserDeals(userId: string, callback: (deals: Deal[]) => void): () => void {
+  const q = query(collection(db, "deals"), where("userId", "==", userId));
+  return onSnapshot(q, (snap) => {
+    const list: Deal[] = [];
+    snap.forEach((docSnap) => {
+      const d = docSnap.data();
+      list.push({
+        id: docSnap.id,
+        title: d.title || d.name || "Deal Opportunity",
+        value: Number(d.value) || 25000,
+        currency: d.currency || "USD ($)",
+        pipeline: d.pipeline || "Standard Sales Pipeline",
+        stage: d.stage || "lead",
+        expectedClose: d.expectedClose || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
+        probability: d.probability !== undefined ? d.probability : 50,
+        owner: d.owner || "Alex Rivers",
+        companyName: d.companyName || d.associatedCompany || "Enterprise Client",
+        contactName: d.contactName || d.associatedContact || "Key Stakeholder",
+        notes: d.notes || "",
+        createdAt: d.createdAt || new Date().toISOString(),
+      });
+    });
+    callback(list);
+  }, (err) => {
+    console.warn("Real-time deals sync error:", err);
+  });
+}
+
+export async function addDealToFirestore(userId: string, deal: Partial<Deal>): Promise<string> {
+  const ref = await addDoc(collection(db, "deals"), {
+    userId,
+    title: deal.title || "New Enterprise Deal",
+    value: Number(deal.value) || 50000,
+    currency: deal.currency || "USD ($)",
+    pipeline: deal.pipeline || "Standard Sales Pipeline",
+    stage: deal.stage || "lead",
+    expectedClose: deal.expectedClose || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
+    probability: deal.probability !== undefined ? deal.probability : 50,
+    owner: deal.owner || "Alex Rivers",
+    companyName: deal.companyName || "Target Account",
+    contactName: deal.contactName || "Main Prospect",
+    notes: deal.notes || "",
+    createdAt: new Date().toISOString(),
+  });
+  return ref.id;
+}
+
+export async function updateDealInFirestore(dealId: string, updates: Partial<Deal>): Promise<void> {
+  const ref = doc(db, "deals", dealId);
+  await updateDoc(ref, updates as any);
+}
+
+export async function deleteDealFromFirestore(dealId: string): Promise<void> {
+  const ref = doc(db, "deals", dealId);
+  await deleteDoc(ref);
 }
 
 // ================= CAMPAIGNS =================
@@ -240,17 +568,122 @@ export async function getUserCampaigns(userId: string): Promise<GeneratedCampaig
 
 export async function saveCampaignToFirestore(userId: string, campaign: GeneratedCampaign): Promise<string> {
   const ref = doc(db, "campaigns", campaign.id);
-  await setDoc(ref, {
+  const payload = sanitizeFirestorePayload({
     ...campaign,
     userId,
     updatedAt: new Date().toISOString(),
   });
+  await setDoc(ref, payload);
   return campaign.id;
 }
 
-export async function updateCampaignStatusInFirestore(campaignId: string, status: "draft" | "scheduled" | "active" | "completed"): Promise<void> {
+export async function updateCampaignStatusInFirestore(
+  campaignId: string,
+  status: "draft" | "scheduled" | "active" | "completed",
+  additionalData?: any
+): Promise<void> {
   const ref = doc(db, "campaigns", campaignId);
-  await updateDoc(ref, { status, updatedAt: new Date().toISOString() });
+  await updateDoc(ref, {
+    status,
+    updatedAt: new Date().toISOString(),
+    ...(additionalData || {}),
+  });
+}
+
+export async function duplicateCampaignInFirestore(userId: string, campaign: GeneratedCampaign): Promise<GeneratedCampaign> {
+  const newId = `camp-${Date.now()}`;
+  const duplicated: GeneratedCampaign = {
+    ...campaign,
+    id: newId,
+    name: `${campaign.name} (Copy)`,
+    status: "draft",
+    createdAt: new Date().toISOString().split("T")[0],
+    metrics: {
+      sent: 0,
+      delivered: 0,
+      openRate: 0,
+      clickRate: 0,
+      replies: 0,
+      conversions: 0,
+      revenue: 0,
+      meetingsBooked: 0,
+    },
+  };
+  await saveCampaignToFirestore(userId, duplicated);
+  await addCampaignEventToFirestore(userId, newId, "Draft Saved", `Campaign duplicated from ${campaign.name}`);
+  return duplicated;
+}
+
+export async function deleteCampaignFromFirestore(campaignId: string): Promise<void> {
+  const ref = doc(db, "campaigns", campaignId);
+  await deleteDoc(ref);
+}
+
+// ================= CAMPAIGN TIMELINE EVENTS =================
+export interface CampaignEvent {
+  id: string;
+  campaignId: string;
+  userId: string;
+  type: string;
+  description: string;
+  timestamp: string;
+  metadata?: any;
+}
+
+export async function addCampaignEventToFirestore(
+  userId: string,
+  campaignId: string,
+  type: string,
+  description: string,
+  metadata: any = {}
+): Promise<string> {
+  try {
+    const ref = await addDoc(collection(db, "campaignEvents"), {
+      userId,
+      campaignId,
+      type,
+      description,
+      metadata,
+      timestamp: new Date().toISOString(),
+    });
+    return ref.id;
+  } catch (err) {
+    console.error("Error adding campaign event:", err);
+    return "";
+  }
+}
+
+export async function getCampaignEventsFromFirestore(userId: string, campaignId?: string): Promise<CampaignEvent[]> {
+  try {
+    let q;
+    if (campaignId) {
+      q = query(
+        collection(db, "campaignEvents"),
+        where("userId", "==", userId),
+        where("campaignId", "==", campaignId)
+      );
+    } else {
+      q = query(collection(db, "campaignEvents"), where("userId", "==", userId));
+    }
+    const snap = await getDocs(q);
+    const events: CampaignEvent[] = [];
+    snap.forEach((docSnap) => {
+      const d: any = docSnap.data();
+      events.push({
+        id: docSnap.id,
+        campaignId: d.campaignId,
+        userId: d.userId,
+        type: d.type || "Event",
+        description: d.description || "",
+        timestamp: d.timestamp || new Date().toISOString(),
+        metadata: d.metadata || {},
+      });
+    });
+    return events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  } catch (err) {
+    console.error("Error fetching campaign events:", err);
+    return [];
+  }
 }
 
 // ================= EMAILS =================
@@ -264,17 +697,52 @@ export async function getUserEmails(userId: string) {
   }
 }
 
-export async function recordSentEmailInFirestore(userId: string, campaignId: string, recipientEmail: string, subject: string, body: string) {
-  return addDoc(collection(db, "emails"), {
+export async function getCampaignEmailsFromFirestore(userId: string, campaignId: string) {
+  try {
+    const q = query(
+      collection(db, "emails"),
+      where("userId", "==", userId),
+      where("campaignId", "==", campaignId)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    return [];
+  }
+}
+
+export async function recordSentEmailInFirestore(
+  userId: string,
+  campaignId: string,
+  recipientEmail: string,
+  subject: string,
+  body: string,
+  status: "sent" | "delivered" | "failed" | "bounced" = "delivered"
+) {
+  const ref = await addDoc(collection(db, "emails"), {
     userId,
     campaignId,
     recipientEmail,
     subject,
     body,
-    status: "sent",
+    status,
     sentAt: new Date().toISOString(),
+    deliveredAt: status === "delivered" ? new Date().toISOString() : null,
     opened: false,
     clicked: false,
+    converted: false,
+  });
+  return ref.id;
+}
+
+export async function updateEmailStatusInFirestore(
+  emailId: string,
+  updates: { opened?: boolean; clicked?: boolean; converted?: boolean; status?: string }
+) {
+  const ref = doc(db, "emails", emailId);
+  await updateDoc(ref, {
+    ...updates,
+    updatedAt: new Date().toISOString(),
   });
 }
 
@@ -292,25 +760,6 @@ export async function getUserLandingPages(userId: string) {
 export async function saveLandingPageToFirestore(userId: string, pageData: any) {
   return addDoc(collection(db, "landingPages"), {
     ...pageData,
-    userId,
-    createdAt: new Date().toISOString(),
-  });
-}
-
-// ================= WORKFLOWS =================
-export async function getUserWorkflows(userId: string) {
-  try {
-    const q = query(collection(db, "workflows"), where("userId", "==", userId));
-    const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  } catch (e) {
-    return [];
-  }
-}
-
-export async function saveWorkflowToFirestore(userId: string, workflow: any) {
-  return addDoc(collection(db, "workflows"), {
-    ...workflow,
     userId,
     createdAt: new Date().toISOString(),
   });
@@ -339,6 +788,28 @@ export async function getUserTasks(userId: string): Promise<Task[]> {
     console.error("Error fetching tasks:", err);
     return [];
   }
+}
+
+export function subscribeToUserTasks(userId: string, callback: (tasks: Task[]) => void): () => void {
+  const q = query(collection(db, "tasks"), where("userId", "==", userId));
+  return onSnapshot(q, (snap) => {
+    const list: Task[] = [];
+    snap.forEach((docSnap) => {
+      const d = docSnap.data();
+      list.push({
+        id: docSnap.id,
+        title: d.title || "Sales Task",
+        dueDate: d.dueDate || "Today",
+        priority: d.priority || "medium",
+        completed: Boolean(d.completed),
+        assignee: d.assignee || "You",
+        relatedTo: d.relatedTo || "Enterprise Prospect",
+      });
+    });
+    callback(list);
+  }, (err) => {
+    console.warn("Real-time tasks sync error:", err);
+  });
 }
 
 export async function addTaskToFirestore(userId: string, task: Partial<Task>): Promise<string> {
@@ -380,6 +851,98 @@ export async function addNotificationToFirestore(userId: string, title: string, 
     type,
     createdAt: new Date().toISOString(),
   });
+}
+
+// ================= CHATS =================
+// ================= WORKFLOW ENGINE FIRESTORE FUNCTIONS =================
+export async function getUserWorkflows(userId: string): Promise<WorkflowAutomation[]> {
+  try {
+    const q = query(collection(db, "workflows"), where("userId", "==", userId));
+    const snap = await getDocs(q);
+    const list: WorkflowAutomation[] = [];
+    snap.forEach((d) => {
+      list.push({ id: d.id, ...d.data() } as WorkflowAutomation);
+    });
+    return list.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+  } catch (err) {
+    console.error("Error fetching user workflows:", err);
+    return [];
+  }
+}
+
+export async function saveWorkflowToFirestore(userId: string, workflow: Partial<WorkflowAutomation>): Promise<string> {
+  try {
+    const workflowId = workflow.id || `wf-${Date.now()}`;
+    const ref = doc(db, "workflows", workflowId);
+    const payload = {
+      ...workflow,
+      id: workflowId,
+      userId,
+      updatedAt: new Date().toISOString(),
+      createdAt: workflow.createdAt || new Date().toISOString(),
+    };
+    await setDoc(ref, payload, { merge: true });
+    return workflowId;
+  } catch (e) {
+    console.error("Error saving workflow to Firestore:", e);
+    throw e;
+  }
+}
+
+export async function updateWorkflowStatusInFirestore(userId: string, workflowId: string, status: 'active' | 'paused' | 'draft' | 'published'): Promise<void> {
+  try {
+    const ref = doc(db, "workflows", workflowId);
+    await updateDoc(ref, { status, updatedAt: new Date().toISOString() });
+  } catch (e) {
+    console.error("Error updating workflow status in Firestore:", e);
+    throw e;
+  }
+}
+
+export async function deleteWorkflowFromFirestore(workflowId: string): Promise<void> {
+  try {
+    const ref = doc(db, "workflows", workflowId);
+    await deleteDoc(ref);
+  } catch (e) {
+    console.error("Error deleting workflow from Firestore:", e);
+    throw e;
+  }
+}
+
+export async function saveWorkflowExecutionLogToFirestore(userId: string, log: Partial<WorkflowExecutionLog>): Promise<string> {
+  try {
+    const logId = log.id || `log-${Date.now()}`;
+    const ref = doc(db, "workflow_execution_logs", logId);
+    const payload = {
+      ...log,
+      id: logId,
+      userId,
+      completedAt: log.completedAt || new Date().toISOString(),
+    };
+    await setDoc(ref, payload, { merge: true });
+    return logId;
+  } catch (e) {
+    console.error("Error saving execution log to Firestore:", e);
+    throw e;
+  }
+}
+
+export async function getWorkflowExecutionLogsFromFirestore(userId: string, workflowId?: string): Promise<WorkflowExecutionLog[]> {
+  try {
+    let q = query(collection(db, "workflow_execution_logs"), where("userId", "==", userId));
+    if (workflowId) {
+      q = query(collection(db, "workflow_execution_logs"), where("userId", "==", userId), where("workflowId", "==", workflowId));
+    }
+    const snap = await getDocs(q);
+    const logs: WorkflowExecutionLog[] = [];
+    snap.forEach((d) => {
+      logs.push({ id: d.id, ...d.data() } as WorkflowExecutionLog);
+    });
+    return logs.sort((a, b) => new Date(b.completedAt || 0).getTime() - new Date(a.completedAt || 0).getTime());
+  } catch (e) {
+    console.error("Error getting execution logs:", e);
+    return [];
+  }
 }
 
 // ================= SETTINGS =================
@@ -439,7 +1002,19 @@ export async function initializeSampleDataIfEmpty(userId: string): Promise<boole
       await addCompanyToFirestore(userId, comp);
     }
 
-    // 3. Initial Tasks
+    // 3. Initial Deals
+    const initialDealsData = [
+      { title: "Hospital AI Triage System Expansion", companyName: "Saint Jude Health System", contactName: "Dr. Elena Rostova", value: 125000, stage: "proposal" as const, probability: 80, expectedClose: "2026-08-15", owner: "Alex Rivers", notes: "Executive decision pending Board approval." },
+      { title: "Supply Chain AI Route Optimizer", companyName: "Apex Global Logistics", contactName: "Marcus Vance", value: 64000, stage: "qualified" as const, probability: 60, expectedClose: "2026-08-28", owner: "Alex Rivers", notes: "Technical discovery meeting scheduled." },
+      { title: "Marketing Automation Platform Licenses", companyName: "Nexus Technologies", contactName: "Sarah Chen", value: 32000, stage: "contacted" as const, probability: 40, expectedClose: "2026-09-10", owner: "Alex Rivers", notes: "Pricing sheet sent." },
+      { title: "FinTech Compliance AI Engine", companyName: "Sterling Financial", contactName: "David Sterling", value: 120000, stage: "lead" as const, probability: 20, expectedClose: "2026-10-01", owner: "Alex Rivers", notes: "Inbound inquiry from webinar." },
+      { title: "Clinic Pilot Program", companyName: "Saint Jude Health System", contactName: "Dr. Elena Rostova", value: 60000, stage: "won" as const, probability: 100, expectedClose: "2026-07-10", owner: "Alex Rivers", notes: "Signed agreement received!" },
+    ];
+    for (const d of initialDealsData) {
+      await addDealToFirestore(userId, d);
+    }
+
+    // 4. Initial Tasks
     const initialTasks = [
       { title: "Review custom proposals for Apex Cloud team", dueDate: "Today at 3:00 PM", priority: "high" as const, completed: false, assignee: "Account Manager", relatedTo: "Sarah Jenkins" },
       { title: "Schedule follow-up demo call with Lumina Tech CRO", dueDate: "Tomorrow at 11:00 AM", priority: "high" as const, completed: false, assignee: "Sales Representative", relatedTo: "Marcus Vance" },
@@ -571,6 +1146,148 @@ export async function initializeSampleDataIfEmpty(userId: string): Promise<boole
     return true;
   } catch (err) {
     console.error("Error initializing sample Firestore data:", err);
+    return false;
+  }
+}
+
+// ================= AI SETTINGS =================
+export async function getAISettingsFromFirestore(userId: string): Promise<AISettings | null> {
+  try {
+    const docRef = doc(db, "ai_settings", userId || "default_user");
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return snap.data() as AISettings;
+    }
+  } catch (err) {
+    console.error("Error getting AI settings from Firestore:", err);
+  }
+  return null;
+}
+
+export async function saveAISettingsToFirestore(userId: string, settings: AISettings): Promise<boolean> {
+  try {
+    const docRef = doc(db, "ai_settings", userId || "default_user");
+    await setDoc(docRef, {
+      ...settings,
+      userId: userId || "default_user",
+      updatedAt: new Date().toISOString(),
+    });
+    return true;
+  } catch (err) {
+    console.error("Error saving AI settings to Firestore:", err);
+    return false;
+  }
+}
+
+// Helper to strip undefined values which cause Firestore addDoc/setDoc errors
+function sanitizeFirestorePayload(obj: Record<string, any>): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const key of Object.keys(obj)) {
+    const val = obj[key];
+    if (val !== undefined) {
+      if (val !== null && typeof val === "object" && !Array.isArray(val) && !(val instanceof Date)) {
+        result[key] = sanitizeFirestorePayload(val);
+      } else {
+        result[key] = val;
+      }
+    }
+  }
+  return result;
+}
+
+// ================= AI LOGS =================
+export async function logAIRequestToFirestore(userId: string, logData: AILogEntry): Promise<string> {
+  try {
+    const payload = sanitizeFirestorePayload({
+      ...logData,
+      userId: userId || "guest",
+      createdAt: new Date().toISOString(),
+    });
+    const ref = await addDoc(collection(db, "ai_logs"), payload);
+    return ref.id;
+  } catch (err) {
+    console.error("Error logging AI request to Firestore:", err);
+    return `log-local-${Date.now()}`;
+  }
+}
+
+export async function getAILogsFromFirestore(userId: string): Promise<AILogEntry[]> {
+  try {
+    const q = query(
+      collection(db, "ai_logs"),
+      where("userId", "==", userId || "guest")
+    );
+    const snap = await getDocs(q);
+    const logs: AILogEntry[] = [];
+    snap.forEach((docSnap) => {
+      const d = docSnap.data();
+      logs.push({
+        id: docSnap.id,
+        userId: d.userId,
+        timestamp: d.timestamp || d.createdAt || new Date().toISOString(),
+        prompt: d.prompt || "",
+        model: d.model || "llama3.2",
+        responseTimeMs: d.responseTimeMs || 0,
+        response: d.response || "",
+        status: d.status || "success",
+        error: d.error || undefined,
+      });
+    });
+    return logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  } catch (err) {
+    console.error("Error fetching AI logs from Firestore:", err);
+    return [];
+  }
+}
+
+// ================= CHAT HISTORY / CONVERSATIONS =================
+export async function getUserChats(userId: string): Promise<ChatSession[]> {
+  try {
+    const q = query(collection(db, "chat_sessions"), where("userId", "==", userId || "guest"));
+    const snap = await getDocs(q);
+    const sessions: ChatSession[] = [];
+    snap.forEach((docSnap) => {
+      const d = docSnap.data();
+      sessions.push({
+        id: docSnap.id,
+        userId: d.userId,
+        title: d.title || "Sales Chat",
+        model: d.model || "llama3.2",
+        createdAt: d.createdAt || new Date().toISOString(),
+        updatedAt: d.updatedAt || new Date().toISOString(),
+        messages: d.messages || [],
+      });
+    });
+    return sessions.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  } catch (err) {
+    console.error("Error fetching chat sessions from Firestore:", err);
+    return [];
+  }
+}
+
+export async function saveChatToFirestore(userId: string, session: ChatSession): Promise<boolean> {
+  try {
+    const docRef = doc(db, "chat_sessions", session.id);
+    const payload = sanitizeFirestorePayload({
+      ...session,
+      userId: userId || "guest",
+      updatedAt: new Date().toISOString(),
+    });
+    await setDoc(docRef, payload);
+    return true;
+  } catch (err) {
+    console.error("Error saving chat session to Firestore:", err);
+    return false;
+  }
+}
+
+export async function deleteChatFromFirestore(userId: string, sessionId: string): Promise<boolean> {
+  try {
+    const docRef = doc(db, "chat_sessions", sessionId);
+    await deleteDoc(docRef);
+    return true;
+  } catch (err) {
+    console.error("Error deleting chat session from Firestore:", err);
     return false;
   }
 }
