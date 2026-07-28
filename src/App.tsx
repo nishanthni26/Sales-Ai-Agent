@@ -143,7 +143,7 @@ export default function App() {
           company: "SalesFlow Corp",
         };
         setRealUser(loggedUser);
-        setUser(loggedUser);
+        setUser((prev) => (prev?.id === loggedUser.id ? prev : loggedUser));
       } else {
         try {
           await signInAnonymously(auth);
@@ -514,7 +514,7 @@ export default function App() {
         <main className="flex-1 flex flex-col pb-20 md:pb-0 overflow-x-hidden">
           <AnimatePresence mode="wait">
             <motion.div
-              key={activeTab + (user ? "-user" : "-anon") + appMode}
+              key={activeTab + appMode}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
