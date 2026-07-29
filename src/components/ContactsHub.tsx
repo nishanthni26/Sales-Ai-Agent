@@ -101,6 +101,7 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
     { id: "list-4", name: "Q3 Priority Outbound", type: "static", count: 2, criteria: "Manual Tag" },
   ]);
 
+  // Import wizard state
   const [importStep, setImportStep] = useState<1 | 2 | 3 | 4 | 5 | 6 | 7>(1);
   const [importObjectType, setImportObjectType] = useState<"Contacts" | "Companies" | "Deals" | "Tickets">("Contacts");
   const [importType, setImportType] = useState<"create_and_update" | "create_only" | "update_only">("create_and_update");
@@ -273,7 +274,11 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
   };
 
   const loadSampleCsv = () => {
-    const sample = `First Name,Last Name,Email,Phone,Company,Job Title,Lifecycle Stage,Lead Status,Country\nSarah,Jenkins,sarah.j@acme.com,+1 555-0192,Acme Corp,VP Sales,MQL,In Progress,USA\nDavid,Miller,d.miller@fintech.io,+1 555-0283,FintechHub,CTO,SQL,Open Deal,UK\nElena,Rostova,elena@cloudscale.co,+1 555-0374,CloudScale,Head of Growth,Opportunity,Attempted to Contact,Canada\nMarcus,Vance,marcus.v@apex.io,+1 555-0465,Apex Global,SVP Enterprise,Customer,Open,Germany`;
+    const sample = `First Name,Last Name,Email,Phone,Company,Job Title,Lifecycle Stage,Lead Status,Country
+Sarah,Jenkins,sarah.j@acme.com,+1 555-0192,Acme Corp,VP Sales,MQL,In Progress,USA
+David,Miller,d.miller@fintech.io,+1 555-0283,FintechHub,CTO,SQL,Open Deal,UK
+Elena,Rostova,elena@cloudscale.co,+1 555-0374,CloudScale,Head of Growth,Opportunity,Attempted to Contact,Canada
+Marcus,Vance,marcus.v@apex.io,+1 555-0465,Apex Global,SVP Enterprise,Customer,Open,Germany`;
     processCsv(sample, "sample_prospects.csv");
   };
 
@@ -290,34 +295,45 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
 
   const executeImport = () => {
     setIsImporting(true); setImportStep(7); setImportProgressPercent(0);
-    let current = 0; const total = parsedRows.length;
+    const total = parsedRows.length;
     let success = 0, failed = 0, skipped = 0;
-    const interval = setInterval(() => {
-      current++; const row = parsedRows[current - 1];
+    const validContacts: Partial<Contact>[] = [];
+
+    parsedRows.forEach((row) => {
       const emailHeader = Object.keys(columnMappings).find((k) => columnMappings[k] === "email");
       const emailVal = emailHeader ? row[emailHeader]?.trim() : "";
-      if (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) { failed++; }
-      else {
-        const isDup = contacts.some((c) => c.email.toLowerCase() === emailVal.toLowerCase());
-        if (isDup && duplicateOption === "skip") { skipped++; }
-        else {
-          success++;
-          const firstName = row[Object.keys(columnMappings).find((k) => columnMappings[k] === "firstName") || ""] || "Contact";
-          const lastName = row[Object.keys(columnMappings).find((k) => columnMappings[k] === "lastName") || ""] || "";
-          const company = row[Object.keys(columnMappings).find((k) => columnMappings[k] === "company") || ""] || "Acme Inc";
-          const role = row[Object.keys(columnMappings).find((k) => columnMappings[k] === "role") || ""] || "Executive";
-          const newContact: Partial<Contact> = { id: `imp-${Date.now()}-${current}`, firstName, lastName, name: `${firstName} ${lastName}`.trim(), email: emailVal, company, role, lifecycleStage: "Lead", leadStatus: "New", owner: "Alex Rivera", leadScore: 70, scoreGrade: "Warm", status: "lead", tags: ["CSV Import"], lastContacted: "Just imported", timeline: [{ id: `tl-imp-${current}`, date: new Date().toLocaleDateString(), type: "status_change", description: `Imported via CSV (${importFileName})` }] };
-          if (onImportContacts) onImportContacts([newContact]); else onAddContact(newContact);
-        }
-      }
-      setImportedSuccessCount(success); setImportedFailCount(failed); setImportedSkippedCount(skipped);
-      setImportProgressPercent(Math.round((current / total) * 100));
-      if (current >= total) {
-        clearInterval(interval); setIsImporting(false);
-        setImportHistory([{ id: `imp-${Date.now()}`, fileName: importFileName, objectType: importObjectType, importedBy: "Current User", importDate: new Date().toISOString().slice(0, 16).replace("T", " "), totalRecords: total, successCount: success, failureCount: failed, skippedCount: skipped, status: "Completed" }, ...importHistory]);
-        showToast(`Import complete: ${success} records added!`);
-      }
-    }, 80);
+      if (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) { failed++; return; }
+      const isDup = contacts.some((c) => c.email.toLowerCase() === emailVal.toLowerCase());
+      if (isDup && duplicateOption === "skip") { skipped++; return; }
+      success++;
+      const firstName = row[Object.keys(columnMappings).find((k) => columnMappings[k] === "firstName") || ""] || "Contact";
+      const lastName = row[Object.keys(columnMappings).find((k) => columnMappings[k] === "lastName") || ""] || "";
+      const company = row[Object.keys(columnMappings).find((k) => columnMappings[k] === "company") || ""] || "Acme Inc";
+      const role = row[Object.keys(columnMappings).find((k) => columnMappings[k] === "role") || ""] || "Executive";
+      validContacts.push({
+        id: `imp-${Date.now()}-${success}`,
+        firstName, lastName, name: `${firstName} ${lastName}`.trim(),
+        email: emailVal, company, role, lifecycleStage: "Lead", leadStatus: "New",
+        owner: "Alex Rivera", leadScore: 70, scoreGrade: "Warm", status: "lead",
+        tags: ["CSV Import"], lastContacted: "Just imported",
+        timeline: [{ id: `tl-imp-${success}`, date: new Date().toLocaleDateString(), type: "status_change", description: `Imported via CSV (${importFileName})` }],
+      });
+    });
+
+    if (onImportContacts && validContacts.length > 0) {
+      onImportContacts(validContacts);
+    } else {
+      validContacts.forEach((c) => onAddContact(c));
+    }
+
+    setImportedSuccessCount(success); setImportedFailCount(failed); setImportedSkippedCount(skipped);
+    setImportProgressPercent(100); setIsImporting(false);
+    setImportHistory([{
+      id: `imp-${Date.now()}`, fileName: importFileName, objectType: importObjectType,
+      importedBy: "Current User", importDate: new Date().toISOString().slice(0, 16).replace("T", " "),
+      totalRecords: total, successCount: success, failureCount: failed, skippedCount: skipped, status: "Completed",
+    }, ...importHistory]);
+    showToast(`Import complete: ${success} records added!`);
   };
 
   const metrics = useMemo(() => ({
@@ -353,6 +369,8 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
           </div>
         </div>
       )}
+
+      {/* HEADER */}
       <div className="p-4 sm:p-6 space-y-4 max-w-3xl mx-auto">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-black text-white tracking-tight">Contacts</h1>
@@ -365,6 +383,8 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
         </div>
         <p className="text-xs text-slate-400 font-medium">Manage contacts, lifecycle stages, segments, and import data.</p>
       </div>
+
+      {/* STATS */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
           {[
@@ -381,6 +401,8 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
           ); })}
         </div>
       </div>
+
+      {/* TABS */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 mt-5">
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2">
           {[
@@ -395,8 +417,11 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
           ); })}
         </div>
       </div>
+
+      {/* CONTACTS DIRECTORY */}
       {activeMainTab === "contacts" && (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 mt-4 space-y-4">
+          {/* Lifecycle pipeline bar */}
           <div className="flex sm:grid sm:grid-cols-7 gap-2.5 overflow-x-auto pb-2 sm:pb-0 no-scrollbar">
             {LIFECYCLE_STAGES.map((item) => {
               const count = contacts.filter((c) => {
@@ -421,6 +446,8 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
               );
             })}
           </div>
+
+          {/* Search & filters */}
           <div className="bg-white text-slate-900 rounded-2xl p-4 border border-slate-200/80 shadow-md space-y-3.5">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
               <div className="relative flex-1">
@@ -465,7 +492,10 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
               </div>
             )}
           </div>
+
+          {/* Contact cards/table */}
           <div className="bg-white text-slate-900 rounded-2xl border border-slate-200/80 shadow-md overflow-hidden">
+            {/* Mobile cards */}
             <div className="block md:hidden p-3 space-y-3">
               {paginatedContacts.length === 0 ? (
                 <div className="p-8 text-center text-slate-500 text-xs"><Users className="w-8 h-8 text-slate-400 mx-auto mb-2" /><p className="font-bold">No contacts found.</p></div>
@@ -495,6 +525,7 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
                 </div>
               ))}
             </div>
+            {/* Desktop table */}
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-extrabold uppercase tracking-wider">
@@ -520,6 +551,7 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
                 </tbody>
               </table>
             </div>
+            {/* Pagination */}
             <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
               <div className="flex items-center gap-2"><span>Rows per page:</span><select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }} className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-800 font-bold"><option value={10}>10</option><option value={20}>20</option><option value={50}>50</option></select><span>Showing {filteredContacts.length === 0 ? 0 : (currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, filteredContacts.length)} of {filteredContacts.length}</span></div>
               <div className="flex items-center gap-2"><button disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)} className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 disabled:opacity-40 font-bold text-slate-700 cursor-pointer">Previous</button><span className="font-mono text-cyan-600 font-bold">Page {currentPage} of {totalPages}</span><button disabled={currentPage >= totalPages} onClick={() => setCurrentPage((p) => p + 1)} className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 disabled:opacity-40 font-bold text-slate-700 cursor-pointer">Next</button></div>
@@ -527,6 +559,8 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
           </div>
         </div>
       )}
+
+      {/* IMPORT WIZARD */}
       {activeMainTab === "import_wizard" && (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 mt-4">
           <div className="bg-white text-slate-900 rounded-2xl p-6 border border-slate-200/80 shadow-md space-y-6">
@@ -640,6 +674,8 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
           </div>
         </div>
       )}
+
+      {/* IMPORT HISTORY */}
       {activeMainTab === "import_history" && (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 mt-4 space-y-4">
           {importHistory.map((rec) => (
@@ -658,6 +694,8 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
           ))}
         </div>
       )}
+
+      {/* FEATURE CARDS */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 mt-6"><div className="border-b border-slate-800 pb-3"><h2 className="text-lg font-black text-white tracking-tight">Contact Tools</h2><p className="text-[11px] text-slate-500">{featureCards.length} modules for contact management</p></div></div>
       <div className="max-w-3xl mx-auto px-4 sm:px-6 mt-5 space-y-4">
         {featureCards.map((card) => { const Icon = card.icon; return (
@@ -668,6 +706,8 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
           </div>
         ); })}
       </div>
+
+      {/* CONTACT DETAIL DRAWER */}
       {selectedContact && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setSelectedContact(null)}>
           <div className="bg-white text-slate-900 rounded-t-3xl sm:rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -746,6 +786,8 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
           </div>
         </div>
       )}
+
+      {/* ADD/EDIT MODAL */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => { setShowAddModal(false); setEditingContact(null); }}>
           <div className="bg-white text-slate-900 rounded-t-3xl sm:rounded-3xl max-w-lg w-full max-h-[92vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -781,6 +823,8 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
           </div>
         </div>
       )}
+
+      {/* BULK OWNER MODAL */}
       {showBulkOwnerModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowBulkOwnerModal(false)}>
           <div className="bg-white text-slate-900 rounded-2xl p-5 max-w-sm w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -790,6 +834,8 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
           </div>
         </div>
       )}
+
+      {/* BULK STAGE MODAL */}
       {showBulkStageModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowBulkStageModal(false)}>
           <div className="bg-white text-slate-900 rounded-2xl p-5 max-w-sm w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -799,6 +845,8 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
           </div>
         </div>
       )}
+
+      {/* MERGE MODAL */}
       {showMergeModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowMergeModal(false)}>
           <div className="bg-white text-slate-900 rounded-2xl p-5 max-w-md w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -812,6 +860,8 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
           </div>
         </div>
       )}
+
+      {/* CREATE LIST MODAL */}
       {showCreateListModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowCreateListModal(false)}>
           <div className="bg-white text-slate-900 rounded-2xl p-5 max-w-sm w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -825,6 +875,8 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
           </div>
         </div>
       )}
+
+      {/* FOOTER */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center pt-6 pb-6"><p className="text-xs text-slate-400 font-semibold">Account time zone</p><p className="text-xs font-bold text-slate-300">GMT-04:00</p></div>
     </div>
   );
