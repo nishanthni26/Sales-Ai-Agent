@@ -91,6 +91,32 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
   const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "error" | "info" } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Feature modal state
+  const [activeFeatureModal, setActiveFeatureModal] = useState<string | null>(null);
+  const [smartLists, setSmartLists] = useState<{ id: string; name: string; type: "smart" | "static"; criteria: string; count: number }[]>([
+    { id: "sl-1", name: "Hot Enterprise Prospects", type: "smart", criteria: "Score >= 80 AND Industry = Technology", count: 4 },
+    { id: "sl-2", name: "MQL Growth Accounts", type: "smart", criteria: "Stage = MQL", count: 3 },
+    { id: "sl-3", name: "Q3 Priority Outbound", type: "static", criteria: "Manual Tag", count: 2 },
+  ]);
+  const [newListForm, setNewListForm] = useState({ name: "", type: "smart" as "smart" | "static", criteria: "" });
+  const [scoringModel, setScoringModel] = useState({ hotThreshold: 80, warmThreshold: 60, coldThreshold: 40, behavioralWeight: 50, demographicWeight: 50 });
+  const [scoringRules, setScoringRules] = useState<{ id: string; label: string; points: number; active: boolean }[]>([
+    { id: "sr-1", label: "Opened email in last 7 days", points: 10, active: true },
+    { id: "sr-2", label: "Visited pricing page", points: 15, active: true },
+    { id: "sr-3", label: "Downloaded whitepaper", points: 20, active: true },
+    { id: "sr-4", label: "Attended webinar", points: 25, active: true },
+    { id: "sr-5", label: "Job title is Director+", points: 15, active: true },
+    { id: "sr-6", label: "Company revenue > $10M", points: 20, active: true },
+  ]);
+  const [notificationSettings, setNotificationSettings] = useState({ newContact: true, stageChange: true, highScore: true, taskOverdue: true, emailOpened: false, dailyDigest: true });
+  const [lifecycleAutomations, setLifecycleAutomations] = useState<{ id: string; trigger: string; action: string; active: boolean }[]>([
+    { id: "la-1", trigger: "Lead score reaches 60", action: "Move to MQL + notify owner", active: true },
+    { id: "la-2", trigger: "Lead score reaches 80", action: "Move to SQL + create follow-up task", active: true },
+    { id: "la-3", trigger: "Contact becomes Customer", action: "Send welcome email + add Evangelist tag", active: true },
+    { id: "la-4", trigger: "No activity for 30 days", action: "Move to Unqualified + alert owner", active: false },
+  ]);
+  const [ownerWorkloads, setOwnerWorkloads] = useState<{ owner: string; contacts: number; capacity: number }[]>([]);
+
   // Import wizard state
   const [importStep, setImportStep] = useState<1 | 2 | 3 | 4 | 5 | 6 | 7>(1);
   const [importObjectType, setImportObjectType] = useState<"Contacts" | "Companies" | "Deals" | "Tickets">("Contacts");
@@ -820,6 +846,251 @@ Marcus,Vance,marcus.v@apex.io,+1 555-0465,Apex Global,SVP Enterprise,Customer,Op
               <div><label className="text-[10px] font-bold text-slate-500 uppercase">Secondary (merge & delete)</label><select value={mergeSecondaryId} onChange={(e) => setMergeSecondaryId(e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer"><option value="">Select secondary...</option>{contacts.map((c) => <option key={c.id} value={c.id}>{c.name} - {c.email}</option>)}</select></div>
             </div>
             <div className="flex gap-2"><button onClick={() => setShowMergeModal(false)} className="flex-1 py-2.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 cursor-pointer">Cancel</button><button onClick={handleExecuteMerge} disabled={!mergePrimaryId || !mergeSecondaryId} className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 font-extrabold text-xs rounded-xl shadow-md cursor-pointer">Merge</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* FEATURE CARDS */}
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 mt-8">
+        <div className="border-b border-slate-800 pb-3 mb-5">
+          <h2 className="text-lg font-black text-white tracking-tight">Contact Tools</h2>
+          <p className="text-[11px] text-slate-500">CRM modules inspired by HubSpot, Marketo &amp; enterprise automation platforms</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {[
+            { id: "contact_mgmt", title: "Contact Management", icon: Users, description: "Centralized database with custom properties, duplicate detection & merge.", tags: ["Custom Properties", "Field Mapping", "Duplicate Detection", "Bulk Edit"], metrics: [{ l: "Contacts", v: metrics.total }, { l: "Properties", v: 16 }, { l: "Duplicates", v: metrics.duplicates }], actionLabel: "Manage Contacts", onClick: () => { setActiveMainTab("contacts"); } },
+            { id: "lifecycle", title: "Lifecycle Automation", icon: TrendingUp, description: "Automated stage transitions from Subscriber to Evangelist with trigger rules.", tags: ["Stage Transitions", "Auto-Promote", "Trigger Rules", "Workflows"], metrics: [{ l: "Stages", v: 7 }, { l: "MQLs", v: contacts.filter((c) => c.lifecycleStage === "MQL").length }, { l: "Customers", v: contacts.filter((c) => c.lifecycleStage === "Customer").length }], actionLabel: "Configure Automation", onClick: () => setActiveFeatureModal("lifecycle") },
+            { id: "lead_scoring", title: "Lead Scoring", icon: Award, description: "Behavioral & demographic scoring with Hot/Warm/Cold grading and custom rules.", tags: ["Behavioral Scoring", "Demographic Scoring", "Score Thresholds", "Custom Rules"], metrics: [{ l: "Hot", v: contacts.filter((c) => c.scoreGrade === "Hot").length }, { l: "Warm", v: contacts.filter((c) => c.scoreGrade === "Warm").length }, { l: "Cold", v: contacts.filter((c) => c.scoreGrade === "Cold").length }], actionLabel: "Configure Scoring", onClick: () => setActiveFeatureModal("scoring") },
+            { id: "smart_lists", title: "Smart Lists & Segmentation", icon: Filter, description: "Dynamic smart lists with behavioral and demographic filter criteria.", tags: ["Smart Lists", "Static Lists", "Behavioral Filters", "Saved Views"], metrics: [{ l: "Smart Lists", v: smartLists.filter((l) => l.type === "smart").length }, { l: "Static Lists", v: smartLists.filter((l) => l.type === "static").length }, { l: "Segments", v: smartLists.length }], actionLabel: "Manage Segments", onClick: () => setActiveFeatureModal("smart_lists") },
+            { id: "import_wizard", title: "Import Wizard", icon: Upload, description: "7-step CSV/Excel import with column mapping, validation & duplicate handling.", tags: ["CSV Import", "Column Mapping", "Email Validation", "Import History"], metrics: [{ l: "Imports", v: importHistory.length }, { l: "Success Rate", v: `${metrics.successRate}%` }, { l: "Records", v: importHistory.reduce((s, r) => s + r.successCount, 0) }], actionLabel: "Open Import Wizard", onClick: () => { setActiveMainTab("import_wizard"); setImportStep(1); } },
+            { id: "companies", title: "Company Records", icon: Building2, description: "Account-level company records with associated contacts and deals.", tags: ["Company Profiles", "Domain Lookup", "Industry Tags", "Deal Association"], metrics: [{ l: "Companies", v: companies.length }, { l: "Industries", v: new Set(companies.map((c) => c.industry)).size }, { l: "Deals", v: deals.length }], actionLabel: "View Companies", onClick: () => setActiveFeatureModal("companies") },
+            { id: "contact_timeline", title: "Contact Timeline", icon: Activity, description: "Full activity timeline with notes, calls, emails & meetings logging.", tags: ["Activity Feed", "Notes", "Call Logs", "Meeting Logs"], metrics: [{ l: "Activities", v: contacts.reduce((s, c) => s + c.timeline.length, 0) }, { l: "Notes", v: contacts.reduce((s, c) => s + c.timeline.filter((t) => t.type === "note_added").length, 0) }, { l: "Calls", v: contacts.reduce((s, c) => s + (c.calls?.length || 0), 0) }], actionLabel: "View Timeline", onClick: () => { if (filteredContacts[0]) setSelectedContact(filteredContacts[0]); } },
+            { id: "bulk_actions", title: "Bulk Actions", icon: CheckSquare, description: "Mass update owner, lifecycle stage, export & delete with audit trail.", tags: ["Bulk Assign", "Bulk Stage Update", "Bulk Export", "Batch Operations"], metrics: [{ l: "Selected", v: selectedIds.length }, { l: "Actions", v: 4 }, { l: "Export", v: "CSV" }], actionLabel: "Select All & Bulk Edit", onClick: () => { setSelectedIds(filteredContacts.map((c) => c.id)); setActiveMainTab("contacts"); } },
+            { id: "merge_contacts", title: "Merge Duplicates", icon: GitMerge, description: "Identify and merge duplicate contacts with primary record selection.", tags: ["Duplicate Detection", "Primary Record", "Timeline Merge", "Auto-Dedup"], metrics: [{ l: "Duplicates", v: metrics.duplicates }, { l: "Merged", v: 0 }, { l: "Auto-Detect", v: "On" }], actionLabel: "Merge Contacts", onClick: () => setShowMergeModal(true) },
+            { id: "contact_owners", title: "Contact Ownership", icon: UserCheck, description: "Assign & manage contact owners with round-robin distribution rules.", tags: ["Owner Assignment", "Round Robin", "Workload Balance", "Territory Rules"], metrics: [{ l: "Owners", v: CONTACT_OWNERS.length }, { l: "Unassigned", v: contacts.filter((c) => !c.owner).length }, { l: "Balance", v: "92%" }], actionLabel: "Manage Owners", onClick: () => { setOwnerWorkloads(CONTACT_OWNERS.map((o) => ({ owner: o, contacts: contacts.filter((c) => c.owner === o).length, capacity: 50 }))); setActiveFeatureModal("ownership"); } },
+            { id: "export_data", title: "Export & Backup", icon: Download, description: "Export contacts to CSV with field selection and filter support.", tags: ["CSV Export", "Field Selection", "Filter Export", "Data Portability"], metrics: [{ l: "Exports", v: 12 }, { l: "Format", v: "CSV" }, { l: "Fields", v: 10 }], actionLabel: "Export Data", onClick: () => handleExportCSV() },
+            { id: "notifications", title: "Contact Notifications", icon: Bell, description: "Real-time alerts for new contacts, stage changes & engagement events.", tags: ["New Contact Alerts", "Stage Change Alerts", "Task Reminders", "Digest Emails"], metrics: [{ l: "Alerts Today", v: 8 }, { l: "Ack Rate", v: "94%" }, { l: "Channels", v: 3 }], actionLabel: "Configure Alerts", onClick: () => setActiveFeatureModal("notifications") },
+          ].map((card) => { const Icon = card.icon; return (
+            <div key={card.id} className="bg-white text-slate-900 rounded-2xl p-4 space-y-3 border border-slate-200/80 shadow-md hover:border-cyan-200 hover:shadow-lg transition-all">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-slate-50 text-cyan-600 flex items-center justify-center shrink-0 border border-slate-200"><Icon className="w-5 h-5" /></div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-black text-slate-900 text-sm">{card.title}</h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{card.description}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5">{card.tags.map((tag, idx) => <span key={idx} className="text-[10px] font-semibold bg-slate-50 text-slate-700 px-2 py-1 rounded-lg border border-slate-100">{tag}</span>)}</div>
+              <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center gap-3 flex-wrap">{card.metrics.map((m, idx) => <span key={idx} className="text-[10px] text-slate-500 font-semibold">{m.l}: <span className="text-slate-800 font-black">{m.v}</span></span>)}</div>
+                <button onClick={card.onClick} className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-all hover:scale-105">
+                  <span>{card.actionLabel}</span><ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ); })}
+        </div>
+      </div>
+
+      {/* SMART LISTS MODAL */}
+      {activeFeatureModal === "smart_lists" && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setActiveFeatureModal(null)}>
+          <div className="bg-white text-slate-900 rounded-2xl p-5 max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-slate-900 text-sm flex items-center gap-2"><Filter className="w-4 h-4 text-cyan-600" /><span>Smart Lists & Segmentation</span></h3>
+              <button onClick={() => setActiveFeatureModal(null)} className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-2 mb-4">
+              {smartLists.map((list) => (
+                <div key={list.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-slate-900 text-xs">{list.name}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Criteria: {list.criteria}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${list.type === "smart" ? "bg-cyan-50 text-cyan-700 border border-cyan-200" : "bg-slate-100 text-slate-600 border border-slate-200"}`}>{list.type}</span>
+                    <span className="text-xs font-mono font-bold text-slate-700">{list.count}</span>
+                    <button onClick={() => { setSmartLists(smartLists.filter((l) => l.id !== list.id)); showToast(`Deleted list: ${list.name}`); }} className="p-1 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-slate-100 pt-4 space-y-3">
+              <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">Create New List</h4>
+              <input type="text" value={newListForm.name} onChange={(e) => setNewListForm({ ...newListForm, name: e.target.value })} placeholder="List name (e.g. Enterprise Prospects)" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-cyan-500" />
+              <div className="grid grid-cols-2 gap-2">
+                <select value={newListForm.type} onChange={(e) => setNewListForm({ ...newListForm, type: e.target.value as "smart" | "static" })} className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer">
+                  <option value="smart">Smart List (auto-updating)</option>
+                  <option value="static">Static List (manual)</option>
+                </select>
+                <input type="text" value={newListForm.criteria} onChange={(e) => setNewListForm({ ...newListForm, criteria: e.target.value })} placeholder="Criteria (e.g. Score >= 70)" className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-cyan-500" />
+              </div>
+              <button onClick={() => { if (newListForm.name) { setSmartLists([...smartLists, { id: `sl-${Date.now()}`, name: newListForm.name, type: newListForm.type, criteria: newListForm.criteria || "All contacts", count: 0 }]); showToast(`Created list: ${newListForm.name}`); setNewListForm({ name: "", type: "smart", criteria: "" }); } }} className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-xs rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-1.5"><Plus className="w-4 h-4" /><span>Create List</span></button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LEAD SCORING MODAL */}
+      {activeFeatureModal === "scoring" && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setActiveFeatureModal(null)}>
+          <div className="bg-white text-slate-900 rounded-2xl p-5 max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-slate-900 text-sm flex items-center gap-2"><Award className="w-4 h-4 text-cyan-600" /><span>Lead Scoring Configuration</span></h3>
+              <button onClick={() => setActiveFeatureModal(null)} className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-2">Score Grade Thresholds</h4>
+                <div className="grid grid-cols-3 gap-2">
+                  <div><label className="text-[10px] font-bold text-amber-600 uppercase">Hot (≥)</label><input type="number" value={scoringModel.hotThreshold} onChange={(e) => setScoringModel({ ...scoringModel, hotThreshold: Number(e.target.value) })} className="w-full px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-center" /></div>
+                  <div><label className="text-[10px] font-bold text-cyan-600 uppercase">Warm (≥)</label><input type="number" value={scoringModel.warmThreshold} onChange={(e) => setScoringModel({ ...scoringModel, warmThreshold: Number(e.target.value) })} className="w-full px-3 py-2 bg-cyan-50 border border-cyan-200 rounded-xl text-xs font-bold text-center" /></div>
+                  <div><label className="text-[10px] font-bold text-slate-500 uppercase">Cold (&lt;)</label><input type="number" value={scoringModel.coldThreshold} onChange={(e) => setScoringModel({ ...scoringModel, coldThreshold: Number(e.target.value) })} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-center" /></div>
+                </div>
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-2">Scoring Weights</h4>
+                <div className="space-y-2">
+                  <div><div className="flex justify-between text-[11px] font-bold mb-1"><span className="text-slate-600">Behavioral</span><span className="text-cyan-600">{scoringModel.behavioralWeight}%</span></div><input type="range" min={0} max={100} value={scoringModel.behavioralWeight} onChange={(e) => setScoringModel({ ...scoringModel, behavioralWeight: Number(e.target.value), demographicWeight: 100 - Number(e.target.value) })} className="w-full accent-cyan-500" /></div>
+                  <div><div className="flex justify-between text-[11px] font-bold mb-1"><span className="text-slate-600">Demographic</span><span className="text-indigo-600">{scoringModel.demographicWeight}%</span></div><input type="range" min={0} max={100} value={scoringModel.demographicWeight} onChange={(e) => setScoringModel({ ...scoringModel, demographicWeight: Number(e.target.value), behavioralWeight: 100 - Number(e.target.value) })} className="w-full accent-indigo-500" /></div>
+                </div>
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-2">Scoring Rules</h4>
+                <div className="space-y-2">
+                  {scoringRules.map((rule) => (
+                    <div key={rule.id} className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                      <button onClick={() => setScoringRules(scoringRules.map((r) => r.id === rule.id ? { ...r, active: !r.active } : r))} className={`w-9 h-5 rounded-full transition-colors shrink-0 ${rule.active ? "bg-cyan-500" : "bg-slate-300"}`}><span className={`block w-4 h-4 bg-white rounded-full shadow transition-transform ${rule.active ? "translate-x-4" : "translate-x-0.5"}`} /></button>
+                      <span className="flex-1 text-xs font-bold text-slate-700">{rule.label}</span>
+                      <input type="number" value={rule.points} onChange={(e) => setScoringRules(scoringRules.map((r) => r.id === rule.id ? { ...r, points: Number(e.target.value) } : r))} className="w-14 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-center" />
+                      <span className="text-[10px] text-slate-500 font-bold">pts</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <button onClick={() => { showToast("Scoring model saved & applied to all contacts"); setActiveFeatureModal(null); }} className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-xs rounded-xl shadow-md cursor-pointer">Save Scoring Model</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* COMPANY RECORDS MODAL */}
+      {activeFeatureModal === "companies" && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setActiveFeatureModal(null)}>
+          <div className="bg-white text-slate-900 rounded-2xl p-5 max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-slate-900 text-sm flex items-center gap-2"><Building2 className="w-4 h-4 text-cyan-600" /><span>Company Records</span></h3>
+              <button onClick={() => setActiveFeatureModal(null)} className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-2">
+              {companies.map((comp) => {
+                const companyContacts = contacts.filter((c) => c.company === comp.name);
+                const companyDeals = deals.filter((d) => d.companyName === comp.name);
+                return (
+                  <div key={comp.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-lg bg-cyan-500 text-white font-black flex items-center justify-center text-xs">{comp.name.charAt(0)}</div><div><p className="font-bold text-slate-900 text-xs">{comp.name}</p><p className="text-[10px] text-slate-500">{comp.industry} - {comp.domain || "No website"}</p></div></div>
+                      <span className="text-xs font-mono font-bold text-cyan-600">${(comp.revenue / 1000000).toFixed(1)}M</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500 pt-1 border-t border-slate-100">
+                      <span className="flex items-center gap-1"><Users className="w-3 h-3" />{companyContacts.length} contacts</span>
+                      <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" />{companyDeals.length} deals</span>
+                      <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{comp.location || "--"}</span>
+                    </div>
+                  </div>
+                );
+              })}
+              {companies.length === 0 && <p className="text-xs text-slate-500 text-center py-8">No company records found.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONTACT OWNERSHIP MODAL */}
+      {activeFeatureModal === "ownership" && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setActiveFeatureModal(null)}>
+          <div className="bg-white text-slate-900 rounded-2xl p-5 max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-slate-900 text-sm flex items-center gap-2"><UserCheck className="w-4 h-4 text-cyan-600" /><span>Contact Ownership & Workload</span></h3>
+              <button onClick={() => setActiveFeatureModal(null)} className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-2 mb-4">
+              {ownerWorkloads.map((wl) => {
+                const pct = Math.min(100, (wl.contacts / wl.capacity) * 100);
+                return (
+                  <div key={wl.owner} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2"><div className="w-7 h-7 rounded-lg bg-cyan-500 text-white font-black flex items-center justify-center text-[10px]">{wl.owner.charAt(0)}</div><span className="font-bold text-slate-900 text-xs">{wl.owner}</span></div>
+                      <span className="text-xs font-mono font-bold text-slate-600">{wl.contacts}/{wl.capacity}</span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all ${pct > 80 ? "bg-rose-500" : pct > 60 ? "bg-amber-500" : "bg-cyan-500"}`} style={{ width: `${pct}%` }} /></div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="border-t border-slate-100 pt-4">
+              <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-2">Round-Robin Assignment</h4>
+              <p className="text-[11px] text-slate-500 mb-3">Automatically distribute unassigned contacts evenly across all owners.</p>
+              <button onClick={() => { const unassigned = contacts.filter((c) => !c.owner); unassigned.forEach((c, i) => onUpdateContact(c.id, { owner: CONTACT_OWNERS[i % CONTACT_OWNERS.length] })); showToast(`Round-robin assigned ${unassigned.length} contacts`); setActiveFeatureModal(null); }} className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-xs rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-1.5"><Repeat className="w-4 h-4" /><span>Run Round-Robin Assignment</span></button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NOTIFICATIONS MODAL */}
+      {activeFeatureModal === "notifications" && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setActiveFeatureModal(null)}>
+          <div className="bg-white text-slate-900 rounded-2xl p-5 max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-slate-900 text-sm flex items-center gap-2"><Bell className="w-4 h-4 text-cyan-600" /><span>Notification Settings</span></h3>
+              <button onClick={() => setActiveFeatureModal(null)} className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-2">
+              {[
+                { key: "newContact", label: "New Contact Created", desc: "Alert when a new contact is added to the database" },
+                { key: "stageChange", label: "Lifecycle Stage Change", desc: "Alert when a contact moves between lifecycle stages" },
+                { key: "highScore", label: "High Score Alert", desc: "Alert when a contact's lead score exceeds 80" },
+                { key: "taskOverdue", label: "Task Overdue", desc: "Alert when a task related to a contact is overdue" },
+                { key: "emailOpened", label: "Email Opened", desc: "Alert when a contact opens an email campaign" },
+                { key: "dailyDigest", label: "Daily Digest Email", desc: "Receive a daily summary of all contact activity" },
+              ].map((item) => (
+                <div key={item.key} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="min-w-0 flex-1 pr-2"><p className="font-bold text-slate-900 text-xs">{item.label}</p><p className="text-[10px] text-slate-500 mt-0.5">{item.desc}</p></div>
+                  <button onClick={() => setNotificationSettings({ ...notificationSettings, [item.key]: !notificationSettings[item.key as keyof typeof notificationSettings] })} className={`w-10 h-6 rounded-full transition-colors shrink-0 ${notificationSettings[item.key as keyof typeof notificationSettings] ? "bg-cyan-500" : "bg-slate-300"}`}><span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform ${notificationSettings[item.key as keyof typeof notificationSettings] ? "translate-x-4" : "translate-x-0.5"}`} /></button>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => { showToast("Notification settings saved"); setActiveFeatureModal(null); }} className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-xs rounded-xl shadow-md cursor-pointer mt-4">Save Settings</button>
+          </div>
+        </div>
+      )}
+
+      {/* LIFECYCLE AUTOMATION MODAL */}
+      {activeFeatureModal === "lifecycle" && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setActiveFeatureModal(null)}>
+          <div className="bg-white text-slate-900 rounded-2xl p-5 max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-slate-900 text-sm flex items-center gap-2"><TrendingUp className="w-4 h-4 text-cyan-600" /><span>Lifecycle Stage Automation</span></h3>
+              <button onClick={() => setActiveFeatureModal(null)} className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-2 mb-4">
+              {lifecycleAutomations.map((auto) => (
+                <div key={auto.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <button onClick={() => setLifecycleAutomations(lifecycleAutomations.map((a) => a.id === auto.id ? { ...a, active: !a.active } : a))} className={`w-9 h-5 rounded-full transition-colors shrink-0 ${auto.active ? "bg-cyan-500" : "bg-slate-300"}`}><span className={`block w-4 h-4 bg-white rounded-full shadow transition-transform ${auto.active ? "translate-x-4" : "translate-x-0.5"}`} /></button>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-slate-900 flex items-center gap-1.5"><Zap className="w-3 h-3 text-amber-500" /><span>When {auto.trigger}</span></p>
+                    <p className="text-[10px] text-slate-500 mt-0.5 pl-5">Then: {auto.action}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-slate-100 pt-4">
+              <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-2">Add New Automation</h4>
+              <div className="space-y-2 mb-3">
+                <input type="text" id="new-auto-trigger" placeholder="Trigger (e.g. Lead score reaches 90)" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-cyan-500" />
+                <input type="text" id="new-auto-action" placeholder="Action (e.g. Move to SQL + notify owner)" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-cyan-500" />
+              </div>
+              <button onClick={() => { const t = (document.getElementById("new-auto-trigger") as HTMLInputElement)?.value; const a = (document.getElementById("new-auto-action") as HTMLInputElement)?.value; if (t && a) { setLifecycleAutomations([...lifecycleAutomations, { id: `la-${Date.now()}`, trigger: t, action: a, active: true }]); showToast("Automation rule created"); (document.getElementById("new-auto-trigger") as HTMLInputElement).value = ""; (document.getElementById("new-auto-action") as HTMLInputElement).value = ""; } }} className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-xs rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-1.5"><Plus className="w-4 h-4" /><span>Add Automation Rule</span></button>
+            </div>
           </div>
         </div>
       )}
