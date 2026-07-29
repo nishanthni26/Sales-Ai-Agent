@@ -566,9 +566,7 @@ export default function App() {
                     }
                   }}
                   onDeleteContact={handleDeleteContact}
-                  onImportContacts={(imported) => {
-                    imported.forEach((cnt) => handleAddContact(cnt));
-                  }}
+                  onImportContacts={(imported) => handleBulkImportContacts(imported as Contact[])}
                   onNavigateToEmailStudio={() => setActiveTab("marketing")}
                   onOpenAIAssistant={(query) => {
                     if (query) setAssistantInitialQuery(query);
