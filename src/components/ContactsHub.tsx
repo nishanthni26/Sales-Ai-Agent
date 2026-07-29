@@ -23,8 +23,6 @@ interface ContactsHubProps {
   onUpdateContact: (contactId: string, updated: Partial<Contact>) => void;
   onDeleteContact?: (contactId: string) => void;
   onImportContacts?: (importedList: Partial<Contact>[]) => void;
-  onNavigateToEmailStudio?: () => void;
-  onOpenAIAssistant?: (query?: string) => void;
 }
 
 type LifecycleStage = "Subscriber" | "Lead" | "MQL" | "SQL" | "Opportunity" | "Customer" | "Evangelist";
@@ -92,14 +90,6 @@ export const ContactsHub: React.FC<ContactsHubProps> = ({
   const [newCallLog, setNewCallLog] = useState<{ duration: string; outcome: ContactCallLog["outcome"]; notes: string }>({ duration: "5 mins", outcome: "Connected", notes: "" });
   const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "error" | "info" } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [showCreateListModal, setShowCreateListModal] = useState(false);
-  const [newListForm, setNewListForm] = useState({ name: "", type: "smart" as "smart" | "static", criteria: "Score >= 70" });
-  const [customLists, setCustomLists] = useState<{ id: string; name: string; type: "smart" | "static"; count: number; criteria: string }[]>([
-    { id: "list-1", name: "Hot Enterprise Prospects", type: "smart", count: 4, criteria: "Score >= 80" },
-    { id: "list-2", name: "MQL Growth Accounts", type: "smart", count: 3, criteria: "Stage = MQL" },
-    { id: "list-3", name: "Tech Industry Decision Makers", type: "smart", count: 5, criteria: "Industry = Technology" },
-    { id: "list-4", name: "Q3 Priority Outbound", type: "static", count: 2, criteria: "Manual Tag" },
-  ]);
 
   // Import wizard state
   const [importStep, setImportStep] = useState<1 | 2 | 3 | 4 | 5 | 6 | 7>(1);
@@ -343,21 +333,6 @@ Marcus,Vance,marcus.v@apex.io,+1 555-0465,Apex Global,SVP Enterprise,Customer,Op
     duplicates: contacts.filter((c, idx, self) => self.findIndex((t) => t.email === c.email) !== idx).length,
     successRate: 98.4,
   }), [contacts]);
-
-  const featureCards = [
-    { id: "contact_mgmt", title: "Contact Management", icon: Users, description: "Centralized contact database with custom properties and field mapping.", tags: ["Custom Properties", "Field Mapping", "Contact Records", "Duplicate Detection", "Merge Contacts", "Bulk Edit", "Contact Timeline", "Activity Logging"], metrics: ["Contacts: " + metrics.total, "Properties: 16", "Duplicates: " + metrics.duplicates], actionLabel: "Manage Contacts" },
-    { id: "lifecycle", title: "Lifecycle Stages", icon: TrendingUp, description: "Track contacts through lifecycle stages from Subscriber to Evangelist.", tags: ["Subscriber", "Lead", "MQL", "SQL", "Opportunity", "Customer", "Evangelist", "Stage Transitions"], metrics: ["Stages: 7", "MQLs: 3", "Customers: 2"], actionLabel: "View Lifecycle" },
-    { id: "lead_scoring", title: "Lead Scoring", icon: Award, description: "Behavioral and demographic scoring with Hot/Warm/Cold grading.", tags: ["Behavioral Scoring", "Demographic Scoring", "Score Thresholds", "Hot/Warm/Cold", "Grade Models", "Score Decay", "Custom Score Fields", "Score Reports"], metrics: ["Hot: 4", "Warm: 5", "Cold: 2"], actionLabel: "Configure Scoring" },
-    { id: "smart_lists", title: "Smart Lists & Segmentation", icon: Filter, description: "Dynamic smart lists and static lists with behavioral and demographic filters.", tags: ["Smart Lists", "Static Lists", "Behavioral Filters", "Demographic Filters", "List Combos", "Suppression Lists", "Saved Views", "Seed Lists"], metrics: ["Smart Lists: 4", "Segments: " + metrics.total, "Saved Views: 5"], actionLabel: "Manage Segments" },
-    { id: "import_wizard", title: "Import Wizard", icon: Upload, description: "7-step CSV/Excel import with column mapping, validation, and duplicate handling.", tags: ["CSV Import", "Excel Import", "Column Mapping", "Email Validation", "Duplicate Handling", "Bulk Create", "Import History", "Error Reports"], metrics: ["Imports: 2", "Success: 98.4%", "Records: 165"], actionLabel: "Open Import Wizard" },
-    { id: "companies", title: "Company Records", icon: Building2, description: "Account-level company records with associated contacts and deals.", tags: ["Company Profiles", "Domain Lookup", "Industry Tags", "Revenue Tracking", "Associated Contacts", "Deal Association", "Account Hierarchy", "Company Timeline"], metrics: ["Companies: " + companies.length, "Industries: 6", "Deals: " + deals.length], actionLabel: "View Companies" },
-    { id: "contact_timeline", title: "Contact Timeline", icon: Activity, description: "Full activity timeline with notes, calls, emails, and meetings logging.", tags: ["Activity Feed", "Notes", "Call Logs", "Email Logs", "Meeting Logs", "File Attachments", "Status Changes", "Task Creation"], metrics: ["Activities: 420", "Notes: 84", "Calls: 120"], actionLabel: "View Timeline" },
-    { id: "bulk_actions", title: "Bulk Actions", icon: CheckSquare, description: "Mass update owner, lifecycle stage, and delete with audit trail.", tags: ["Bulk Assign Owner", "Bulk Stage Update", "Bulk Delete", "Bulk Export", "Selection Tools", "Bulk Merge", "Mass Tags", "Batch Operations"], metrics: ["Selected: " + selectedIds.length, "Actions: 4", "Export: CSV"], actionLabel: "Bulk Actions" },
-    { id: "merge_contacts", title: "Merge Duplicates", icon: GitMerge, description: "Identify and merge duplicate contacts with primary record selection.", tags: ["Duplicate Detection", "Primary Record", "Merge Fields", "Timeline Merge", "Tag Merge", "Notes Merge", "Audit Log", "Auto-Dedup"], metrics: ["Duplicates: " + metrics.duplicates, "Merged: 0", "Auto-Detect: On"], actionLabel: "Merge Contacts" },
-    { id: "contact_owners", title: "Contact Ownership", icon: UserCheck, description: "Assign and manage contact owners with round-robin distribution rules.", tags: ["Owner Assignment", "Round Robin", "Workload Balance", "Owner Transfer", "Assignment Rules", "Auto-Assign", "Owner Reports", "Territory Rules"], metrics: ["Owners: 5", "Unassigned: 0", "Balance: 92%"], actionLabel: "Manage Owners" },
-    { id: "export_data", title: "Export & Backup", icon: Download, description: "Export contacts to CSV with field selection and filter support.", tags: ["CSV Export", "Field Selection", "Filter Export", "Selected Export", "Full Backup", "Scheduled Export", "API Access", "Data Portability"], metrics: ["Exports: 12", "Format: CSV", "Fields: 10"], actionLabel: "Export Data" },
-    { id: "notifications", title: "Contact Notifications", icon: Bell, description: "Real-time alerts for new contacts, stage changes, and engagement events.", tags: ["New Contact Alerts", "Stage Change Alerts", "Engagement Alerts", "Task Reminders", "Digest Emails", "Mobile Push", "Custom Triggers", "Notification Rules"], metrics: ["Alerts Today: 8", "Ack Rate: 94%", "Channels: 3"], actionLabel: "Configure Alerts" },
-  ];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans pb-20">
@@ -695,18 +670,6 @@ Marcus,Vance,marcus.v@apex.io,+1 555-0465,Apex Global,SVP Enterprise,Customer,Op
         </div>
       )}
 
-      {/* FEATURE CARDS */}
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 mt-6"><div className="border-b border-slate-800 pb-3"><h2 className="text-lg font-black text-white tracking-tight">Contact Tools</h2><p className="text-[11px] text-slate-500">{featureCards.length} modules for contact management</p></div></div>
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 mt-5 space-y-4">
-        {featureCards.map((card) => { const Icon = card.icon; return (
-          <div key={card.id} className="bg-white text-slate-900 rounded-2xl p-5 space-y-4 border border-slate-200/80 shadow-md hover:border-cyan-200 transition-all">
-            <div className="flex items-start gap-3"><div className="w-10 h-10 rounded-xl bg-slate-50 text-cyan-600 flex items-center justify-center shrink-0 border border-slate-200"><Icon className="w-5 h-5" /></div><div className="min-w-0 flex-1"><h3 className="font-black text-slate-900 text-sm">{card.title}</h3><p className="text-[11px] text-slate-500 mt-0.5">{card.description}</p></div></div>
-            <div className="flex flex-wrap gap-1.5">{card.tags.map((tag, idx) => <span key={idx} className="text-[10px] font-semibold bg-slate-50 text-slate-700 px-2 py-1 rounded-lg border border-slate-100">{tag}</span>)}</div>
-            <div className="flex items-center justify-between flex-wrap gap-2 pt-3 border-t border-slate-100"><div className="flex items-center gap-3 flex-wrap">{card.metrics.map((m, idx) => <span key={idx} className="text-[10px] text-slate-500 font-semibold">{m}</span>)}</div><button onClick={() => alert(`Opening ${card.title}...`)} className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[11px] font-bold flex items-center gap-1.5 cursor-pointer"><span>{card.actionLabel}</span><ArrowRight className="w-3.5 h-3.5" /></button></div>
-          </div>
-        ); })}
-      </div>
-
       {/* CONTACT DETAIL DRAWER */}
       {selectedContact && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setSelectedContact(null)}>
@@ -857,21 +820,6 @@ Marcus,Vance,marcus.v@apex.io,+1 555-0465,Apex Global,SVP Enterprise,Customer,Op
               <div><label className="text-[10px] font-bold text-slate-500 uppercase">Secondary (merge & delete)</label><select value={mergeSecondaryId} onChange={(e) => setMergeSecondaryId(e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer"><option value="">Select secondary...</option>{contacts.map((c) => <option key={c.id} value={c.id}>{c.name} - {c.email}</option>)}</select></div>
             </div>
             <div className="flex gap-2"><button onClick={() => setShowMergeModal(false)} className="flex-1 py-2.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 cursor-pointer">Cancel</button><button onClick={handleExecuteMerge} disabled={!mergePrimaryId || !mergeSecondaryId} className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 font-extrabold text-xs rounded-xl shadow-md cursor-pointer">Merge</button></div>
-          </div>
-        </div>
-      )}
-
-      {/* CREATE LIST MODAL */}
-      {showCreateListModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowCreateListModal(false)}>
-          <div className="bg-white text-slate-900 rounded-2xl p-5 max-w-sm w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-black text-slate-900 text-sm mb-3">Create New List</h3>
-            <div className="space-y-3 mb-4">
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">List Name</label><input type="text" value={newListForm.name} onChange={(e) => setNewListForm({ ...newListForm, name: e.target.value })} placeholder="e.g. Enterprise Prospects" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-cyan-500" /></div>
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">List Type</label><select value={newListForm.type} onChange={(e) => setNewListForm({ ...newListForm, type: e.target.value as any })} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold cursor-pointer"><option value="smart">Smart List (auto-updating)</option><option value="static">Static List (manual)</option></select></div>
-              <div><label className="text-[10px] font-bold text-slate-500 uppercase">Criteria</label><input type="text" value={newListForm.criteria} onChange={(e) => setNewListForm({ ...newListForm, criteria: e.target.value })} placeholder="e.g. Score >= 70" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-cyan-500" /></div>
-            </div>
-            <div className="flex gap-2"><button onClick={() => setShowCreateListModal(false)} className="flex-1 py-2.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 cursor-pointer">Cancel</button><button onClick={() => { if (newListForm.name) { setCustomLists([...customLists, { id: `list-${Date.now()}`, name: newListForm.name, type: newListForm.type, count: 0, criteria: newListForm.criteria }]); showToast(`Created list: ${newListForm.name}`); setShowCreateListModal(false); setNewListForm({ name: "", type: "smart", criteria: "Score >= 70" }); } }} className="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-xs rounded-xl shadow-md cursor-pointer">Create</button></div>
           </div>
         </div>
       )}
